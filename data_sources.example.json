@@ -1,0 +1,34 @@
+{
+  "sources": [
+    {
+      "domain": "stories",
+      "dataset": "roneneldan/TinyStories",
+      "split": "train",
+      "text_field": "text",
+      "max_blocks": 100000
+    },
+    {
+      "domain": "wiki",
+      "dataset": "Salesforce/wikitext",
+      "config": "wikitext-103-raw-v1",
+      "split": "train",
+      "text_field": "text",
+      "max_blocks": 100000
+    },
+    {
+      "domain": "code",
+      "dataset": "codeparrot/github-code-clean",
+      "config": "Python-all",
+      "split": "train",
+      "text_field": "code",
+      "max_blocks": 100000
+    },
+    {
+      "domain": "math",
+      "dataset": "open-web-math/open-web-math",
+      "split": "train",
+      "text_field": "text",
+      "max_blocks": 100000
+    }
+  ]
+}
