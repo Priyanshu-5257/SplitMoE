@@ -3,7 +3,7 @@
 SplitMoE is a compact research codebase for testing whether an MoE layer benefits from explicitly splitting active FFN capacity into a shared path and a routed private path:
 
 $$
-y = x + \frac{1}{\sqrt{2}}\left(S(x) + P_{i^{*}}(x)\right).
+y = x + \frac{1}{\sqrt{2}}\left(S(x) + P_{i^{\ast}}(x)\right).
 $$
 
 It includes compute-matched Dense, standard Top-1 MoE, and SplitMoE configurations; streaming pretokenization into memory-mapped blocks; single-GPU and PyTorch DDP training; Weights & Biases logging; domain-conditioned routing statistics; shared/private norm tracking; and post-training expert-similarity analysis.
@@ -27,7 +27,7 @@ Every token passes through the same FFN, so there is no router or expert special
 Each MoE layer stores four independent width-1024 SwiGLU experts. A learned router chooses exactly one expert for each token:
 
 $$
-i^{*}=\arg\max_i p_i(x), \qquad F(x)=E_{i^{*}}(x).
+i^{\ast}=\arg\max_i p_i(x), \qquad F(x)=E_{i^{\ast}}(x).
 $$
 
 Only the selected expert runs, giving width 1024 of active FFN computation per token while storing four times that expert capacity. This is the conventional Top-1 sparse-MoE baseline.
@@ -37,8 +37,8 @@ Only the selected expert runs, giving width 1024 of active FFN computation per t
 Each MoE layer contains one always-active width-512 shared FFN and four width-512 private experts. The router chooses one private expert per token:
 
 $$
-F(x)=\frac{1}{\sqrt{2}}\left(S(x)+P_{i^{*}}(x)\right),
-\qquad i^{*}=\arg\max_i p_i(x).
+F(x)=\frac{1}{\sqrt{2}}\left(S(x)+P_{i^{\ast}}(x)\right),
+\qquad i^{\ast}=\arg\max_i p_i(x).
 $$
 
 The shared branch is intended to learn transformations useful to every token, while the routed private branches learn specialized residual transformations. Each token activates width `512 + 512 = 1024`, matching the active width of Dense and Standard MoE, but SplitMoE stores fewer expert parameters than Standard MoE.
