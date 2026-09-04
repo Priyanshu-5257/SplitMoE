@@ -232,6 +232,7 @@ def main() -> None:
     model.train()
     optimizer.zero_grad(set_to_none=True)
     last_time = time.perf_counter()
+    completed_step = start_step
     try:
         for step in range(start_step, config.train.max_steps):
             lr = learning_rate(step, config.train)
@@ -290,7 +291,11 @@ def main() -> None:
                 save_checkpoint(Path(config.train.output_dir) / "latest.pt", model, optimizer, scaler, completed_step, config)
     finally:
         if rank == 0:
-            save_checkpoint(Path(config.train.output_dir) / "final.pt", model, optimizer, scaler, config.train.max_steps, config)
+            if completed_step >= config.train.max_steps:
+                save_checkpoint(
+                    Path(config.train.output_dir) / "final.pt",
+                    model, optimizer, scaler, completed_step, config,
+                )
             if run is not None:
                 run.finish()
         cleanup()

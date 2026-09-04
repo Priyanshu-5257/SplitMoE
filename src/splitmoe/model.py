@@ -85,7 +85,7 @@ class RoutedExperts(nn.Module):
         flat_x = x.reshape(-1, x.size(-1))
         flat_indices = indices.reshape(-1)
         flat_selected = selected.reshape(-1)
-        output = torch.zeros_like(flat_x)
+        output = None
         for expert_id, expert in enumerate(self.experts):
             positions = torch.where(flat_indices == expert_id)[0]
             if positions.numel() == 0:
@@ -97,7 +97,13 @@ class RoutedExperts(nn.Module):
             elif self.weight_mode == "none":
                 gate = torch.ones_like(gate)
             expert_out = expert_out * gate.unsqueeze(-1).to(expert_out.dtype)
+            if output is None:
+                # Under AMP, the residual stream can be FP32 while Linear outputs
+                # are FP16/BF16. index_copy requires matching source/destination dtypes.
+                output = torch.zeros(flat_x.shape, device=flat_x.device, dtype=expert_out.dtype)
             output.index_copy_(0, positions, expert_out)
+        if output is None:
+            raise RuntimeError("Cannot dispatch an empty token tensor")
         return output.view_as(x)
 
     @torch.no_grad()

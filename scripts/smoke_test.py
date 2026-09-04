@@ -16,6 +16,7 @@ from splitmoe.data import write_synthetic_dataset
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ddp", action="store_true", help="Run with two local DDP workers")
+    parser.add_argument("--fp16", action="store_true", help="Use FP16 (requires CUDA)")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="splitmoe-smoke-") as temporary:
         root = Path(temporary)
@@ -32,7 +33,7 @@ def main() -> None:
                 "output_dir": str(root / "checkpoints"), "micro_batch_size": 2,
                 "gradient_accumulation_steps": 1, "max_steps": 2, "eval_interval": 2,
                 "eval_batches": 1, "log_interval": 1, "save_interval": 2,
-                "warmup_steps": 1, "precision": "fp32", "num_workers": 0,
+                "warmup_steps": 1, "precision": "fp16" if args.fp16 else "fp32", "num_workers": 0,
                 "wandb_mode": "disabled",
             },
         }

@@ -41,3 +41,15 @@ def test_straight_through_has_unit_forward_scale():
     module = SplitMoE(cfg)
     assert module.routed.weight_mode == "straight_through"
 
+
+def test_split_dispatch_under_autocast():
+    cfg = ModelConfig(
+        vocab_size=64, max_seq_len=8, n_layers=1, d_model=16, n_heads=2,
+        moe_every=1, moe_type="split", n_experts=2, shared_width=16, private_width=16,
+    )
+    model = DecoderLM(cfg)
+    inputs = torch.randint(0, cfg.vocab_size, (2, cfg.max_seq_len))
+    with torch.autocast("cpu", dtype=torch.bfloat16):
+        output = model(inputs, inputs)
+    assert torch.isfinite(output.loss)
+    output.loss.backward()
