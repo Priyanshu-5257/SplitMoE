@@ -8,6 +8,49 @@ y = x + \frac{1}{\sqrt{2}}\left(S(x) + P_{i^*}(x)\right).
 
 It includes compute-matched Dense, standard Top-1 MoE, and SplitMoE configurations; streaming pretokenization into memory-mapped blocks; single-GPU and PyTorch DDP training; Weights & Biases logging; domain-conditioned routing statistics; shared/private norm tracking; and post-training expert-similarity analysis.
 
+## Architectures being compared
+
+All three models are the same 8-layer decoder-only Transformer with `d_model=512`, 8 attention heads, context length 256, and SwiGLU FFNs. Only the FFN architecture changes. Standard MoE and SplitMoE replace the FFN in layers 2, 4, 6, and 8; their other layers remain ordinary dense FFNs.
+
+### Dense
+
+Every Transformer layer contains one ordinary width-1024 SwiGLU FFN:
+
+\[
+F(x)=W_{down}\left(\operatorname{silu}(W_{gate}x)\odot W_{up}x\right).
+\]
+
+Every token passes through the same FFN, so there is no router or expert specialization. This is the control that tells us whether sparse conditional capacity helps at all.
+
+### Standard MoE
+
+Each MoE layer stores four independent width-1024 SwiGLU experts. A learned router chooses exactly one expert for each token:
+
+\[
+i^*=\arg\max_i p_i(x), \qquad F(x)=E_{i^*}(x).
+\]
+
+Only the selected expert runs, giving width 1024 of active FFN computation per token while storing four times that expert capacity. This is the conventional Top-1 sparse-MoE baseline.
+
+### SplitMoE
+
+Each MoE layer contains one always-active width-512 shared FFN and four width-512 private experts. The router chooses one private expert per token:
+
+\[
+F(x)=\frac{1}{\sqrt{2}}\left(S(x)+P_{i^*}(x)\right),
+\qquad i^*=\arg\max_i p_i(x).
+\]
+
+The shared branch is intended to learn transformations useful to every token, while the routed private branches learn specialized residual transformations. Each token activates width `512 + 512 = 1024`, matching the active width of Dense and Standard MoE, but SplitMoE stores fewer expert parameters than Standard MoE.
+
+| Model | FFN used by one token in a compared layer | Stored conditional paths | Total model parameters |
+| --- | --- | ---: | ---: |
+| Dense | one width-1024 dense FFN | 1 | 46.28M |
+| Standard MoE | one selected width-1024 expert | 4 | 65.16M |
+| SplitMoE | width-512 shared + one selected width-512 private expert | 1 shared + 4 private | 55.72M |
+
+The primary comparison is therefore at approximately matched active FFN computation, not matched total parameter count. Use `validation/lm_loss` to compare language-model quality; the reported total loss also includes the router auxiliary terms for the MoE variants.
+
 ## Kaggle: pull and run
 
 Enable both T4 GPUs and internet in the Kaggle notebook settings, then run:
