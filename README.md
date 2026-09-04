@@ -32,6 +32,8 @@ python -m splitmoe.prepare_data \
 
 The example caps each domain at 100,000 blocks (about 25.6M input tokens), preventing corpus size from becoming a routing confound. Reduce each `max_blocks` for a short Kaggle run or raise it for the full experiment. Check `data/train/metadata.json` after preprocessing: its `vocab_size` must match `model.vocab_size` in every experiment config.
 
+The code portion uses the script-free, auto-converted Parquet view of `codeparrot/codeparrot-clean`, which is compatible with current versions of Hugging Face `datasets` used by Kaggle.
+
 Launch the compute-matched experiments on both GPUs:
 
 ```bash

@@ -17,10 +17,9 @@
     },
     {
       "domain": "code",
-      "dataset": "codeparrot/github-code-clean",
-      "config": "Python-all",
+      "dataset": "codeparrot/codeparrot-clean",
       "split": "train",
-      "text_field": "code",
+      "text_field": "content",
       "max_blocks": 100000
     },
     {
