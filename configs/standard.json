@@ -18,6 +18,7 @@
     "train_data": "data/train",
     "validation_data": "data/validation",
     "output_dir": "checkpoints/standard",
+    "seeds": [1337, 2027, 3407, 4517, 5651],
     "micro_batch_size": 8,
     "gradient_accumulation_steps": 4,
     "max_steps": 10000,
@@ -29,9 +30,8 @@
     "warmup_steps": 500,
     "precision": "fp16",
     "num_workers": 2,
-    "wandb_project": "splitmoe",
+    "wandb_project": "splitmoe-seeds",
     "wandb_run_name": "standard",
     "wandb_mode": "online"
   }
 }
-

@@ -17,6 +17,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ddp", action="store_true", help="Run with two local DDP workers")
     parser.add_argument("--fp16", action="store_true", help="Use FP16 (requires CUDA)")
+    parser.add_argument("--multi-seed", action="store_true", help="Exercise sequential seed orchestration")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="splitmoe-smoke-") as temporary:
         root = Path(temporary)
@@ -31,6 +32,7 @@ def main() -> None:
             "train": {
                 "train_data": str(root / "train"), "validation_data": str(root / "validation"),
                 "output_dir": str(root / "checkpoints"), "micro_batch_size": 2,
+                "seeds": [11, 22] if args.multi_seed else [1337],
                 "gradient_accumulation_steps": 1, "max_steps": 2, "eval_interval": 2,
                 "eval_batches": 1, "log_interval": 1, "save_interval": 2,
                 "warmup_steps": 1, "precision": "fp16" if args.fp16 else "fp32", "num_workers": 0,
@@ -47,7 +49,11 @@ def main() -> None:
         if args.ddp:
             environment["CUDA_VISIBLE_DEVICES"] = ""
         subprocess.run(command, check=True, env=environment)
-        assert (root / "checkpoints" / "final.pt").exists()
+        if args.multi_seed:
+            assert (root / "checkpoints" / "seed-11" / "final.pt").exists()
+            assert (root / "checkpoints" / "seed-22" / "final.pt").exists()
+        else:
+            assert (root / "checkpoints" / "final.pt").exists()
     print(f"SplitMoE {'DDP ' if args.ddp else ''}end-to-end smoke test passed")
 
 

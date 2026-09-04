@@ -112,13 +112,24 @@ The example caps each domain at 100,000 blocks (about 25.6M input tokens), preve
 
 The code portion uses the script-free, auto-converted Parquet view of `codeparrot/codeparrot-clean`, which is compatible with current versions of Hugging Face `datasets` used by Kaggle.
 
-Launch the compute-matched experiments on both GPUs:
+Launch the compute-matched experiments on both GPUs. The commands are unchanged, but each command now trains five runs sequentially with seeds `1337`, `2027`, `3407`, `4517`, and `5651`:
 
 ```bash
 torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/dense.json
 torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/standard.json
 torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/split.json
 ```
+
+The replication runs are logged to the separate W&B project `splitmoe-seeds`, preserving the original `splitmoe` project. Run names and checkpoint directories include the seed, for example:
+
+```text
+split-50-seed-1337
+checkpoints/split/seed-1337/final.pt
+```
+
+Validation now uses a fixed, domain-balanced sample on every rank and logs overall plus per-domain LM loss/perplexity. This corrects the source-order limitation documented for the initial single-seed results above. The same fixed validation blocks are used for every architecture and seed.
+
+Based on the initial run times, expect approximately 4.2 hours for five Dense seeds, 5.0 hours for five Standard-MoE seeds, and 5.3 hours for five SplitMoE seeds. Use separate Kaggle sessions if the combined runtime would exceed the notebook limit. Completed seeds retain only `final.pt`; the redundant periodic `latest.pt` is removed to reduce disk use.
 
 Each GPU holds the complete model and receives different batches. There is no expert-parallel all-to-all communication, keeping this an architecture experiment rather than a distributed-systems comparison.
 
@@ -133,6 +144,7 @@ pip install -e '.[dev]'
 pytest -q
 python scripts/smoke_test.py
 python scripts/smoke_test.py --ddp
+python scripts/smoke_test.py --multi-seed
 ```
 
 The smoke test creates a temporary memory-mapped dataset, performs optimizer steps, evaluates, and saves a checkpoint.
@@ -160,19 +172,19 @@ The default router mode is `straight_through`. Its selected gate is divided by a
 
 ## Logged measurements
 
-W&B receives language-model and total loss, perplexity, learning rate, gradient norm, tokens/second, router entropy, load per expert, shared/private activation norms and their ratio, and `P(expert | domain)` during validation.
+W&B receives language-model and total loss, overall and per-domain validation perplexity, learning rate, gradient norm, tokens/second, router entropy, load per expert, shared/private activation norms and their ratio, and `P(expert | domain)` during validation.
 
 Measure centered expert-output similarity after training:
 
 ```bash
-python -m splitmoe.analyze --checkpoint checkpoints/split/final.pt --batches 8
+python -m splitmoe.analyze --checkpoint checkpoints/split/seed-1337/final.pt --batches 8
 ```
 
 The output is one expert-by-expert similarity matrix per MoE layer. Treat similarity as a diagnostic rather than standalone proof of specialization; loss ablations and wrong-expert substitution are stronger follow-up tests.
 
 ## Reproducibility notes
 
-- All variants use the same default seed and pretokenized blocks.
+- All variants use the same five predefined seeds and pretokenized blocks.
 - Auxiliary load balancing and router z-loss are included in the reported total loss; `lm_loss` is logged separately.
 - Data are packed within each domain, so a block has one domain label and domain-routing measurements are not contaminated by cross-domain packing.
 - No capacity-based token dropping is used in this single-node implementation.

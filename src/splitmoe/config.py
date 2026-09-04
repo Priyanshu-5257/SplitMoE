@@ -45,6 +45,7 @@ class TrainConfig:
     validation_data: str = "data/validation"
     output_dir: str = "checkpoints/split"
     seed: int = 1337
+    seeds: list[int] = field(default_factory=lambda: [1337, 2027, 3407, 4517, 5651])
     micro_batch_size: int = 8
     gradient_accumulation_steps: int = 4
     max_steps: int = 10000

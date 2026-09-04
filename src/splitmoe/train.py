@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import copy
+import gc
 import json
 import math
 import random
@@ -11,11 +13,12 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.distributed as dist
+import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data import DataLoader, DistributedSampler, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, DistributedSampler, RandomSampler
 
 from .config import ExperimentConfig
-from .data import TokenBlockDataset
+from .data import DomainBalancedSampler, TokenBlockDataset
 from .distributed import cleanup, initialize, reduce_mean
 from .model import DecoderLM
 
@@ -28,13 +31,25 @@ def seed_everything(seed: int, rank: int) -> None:
         torch.cuda.manual_seed_all(seed + rank)
 
 
-def make_loader(dataset, batch_size, workers, distributed, rank, world_size, train):
-    if distributed:
+def make_loader(
+    dataset, batch_size, workers, distributed, rank, world_size, train, *, seed, eval_batches=None
+):
+    if not train:
+        if eval_batches is None:
+            raise ValueError("eval_batches is required for the balanced validation sampler")
+        sampler = DomainBalancedSampler(
+            dataset,
+            samples_per_replica=eval_batches * batch_size,
+            num_replicas=world_size,
+            rank=rank,
+        )
+    elif distributed:
         sampler = DistributedSampler(
-            dataset, num_replicas=world_size, rank=rank, shuffle=train, seed=1337, drop_last=train
+            dataset, num_replicas=world_size, rank=rank, shuffle=True, seed=seed, drop_last=True
         )
     else:
-        sampler = RandomSampler(dataset) if train else SequentialSampler(dataset)
+        generator = torch.Generator().manual_seed(seed)
+        sampler = RandomSampler(dataset, generator=generator)
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -80,6 +95,8 @@ def evaluate(model, loader, device, cfg, domain_names, distributed):
     model.eval()
     losses: list[torch.Tensor] = []
     lm_losses: list[torch.Tensor] = []
+    domain_loss_sum = torch.zeros(len(domain_names), device=device, dtype=torch.float64)
+    domain_sequence_count = torch.zeros(len(domain_names), device=device, dtype=torch.float64)
     route_counts = None
     for batch_index, (inputs, labels, domains) in enumerate(loader):
         if batch_index >= cfg.eval_batches:
@@ -91,6 +108,12 @@ def evaluate(model, loader, device, cfg, domain_names, distributed):
             output = model(inputs, labels, collect_assignments=True)
         losses.append(output.loss.detach().float())
         lm_losses.append(output.lm_loss.detach().float())
+        per_token_loss = F.cross_entropy(
+            output.logits.detach().float().transpose(1, 2), labels, reduction="none"
+        )
+        per_sequence_loss = per_token_loss.mean(dim=1).double()
+        domain_loss_sum.index_add_(0, domains, per_sequence_loss)
+        domain_sequence_count.add_(torch.bincount(domains, minlength=len(domain_names)).double())
         if output.router_stats:
             if route_counts is None:
                 route_counts = torch.zeros(
@@ -113,6 +136,14 @@ def evaluate(model, loader, device, cfg, domain_names, distributed):
         "validation/lm_loss": reduce_mean(torch.stack(lm_losses).mean()).item(),
     }
     metrics["validation/perplexity"] = math.exp(min(20.0, metrics["validation/lm_loss"]))
+    if distributed:
+        dist.all_reduce(domain_loss_sum, op=dist.ReduceOp.SUM)
+        dist.all_reduce(domain_sequence_count, op=dist.ReduceOp.SUM)
+    domain_losses = domain_loss_sum / domain_sequence_count.clamp_min(1)
+    for domain_id, domain in enumerate(domain_names):
+        value = domain_losses[domain_id].item()
+        metrics[f"validation/domain/{domain}/lm_loss"] = value
+        metrics[f"validation/domain/{domain}/perplexity"] = math.exp(min(20.0, value))
     if route_counts is not None:
         if distributed:
             dist.all_reduce(route_counts, op=dist.ReduceOp.SUM)
@@ -162,34 +193,16 @@ def save_checkpoint(path: Path, model, optimizer, scaler, step, config) -> None:
     temporary.replace(path)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Train a dense, standard-MoE, or SplitMoE decoder")
-    parser.add_argument("--config", required=True)
-    parser.add_argument("--smoke-steps", type=int, default=None, help="Override max steps for a quick validation")
-    args = parser.parse_args()
-    config = ExperimentConfig.from_json(args.config)
-    if args.smoke_steps is not None:
-        config.train.max_steps = args.smoke_steps
-        config.train.eval_interval = max(1, args.smoke_steps)
-        config.train.save_interval = max(1, args.smoke_steps)
-        config.train.wandb_mode = "disabled"
-
-    distributed, rank, local_rank, world_size, device = initialize()
+def train_one(config, distributed, rank, local_rank, world_size, device, train_data, validation_data) -> None:
     seed_everything(config.train.seed, rank)
-    train_data = TokenBlockDataset(config.train.train_data)
-    validation_data = TokenBlockDataset(config.train.validation_data)
-    if train_data.block_size != config.model.max_seq_len:
-        raise ValueError("Pretokenized block size must equal model.max_seq_len")
-    data_vocab = train_data.metadata.get("vocab_size")
-    if data_vocab is not None and int(data_vocab) != config.model.vocab_size:
-        raise ValueError(f"Data vocab_size={data_vocab}, model vocab_size={config.model.vocab_size}")
     train_loader, train_sampler = make_loader(
         train_data, config.train.micro_batch_size, config.train.num_workers,
-        distributed, rank, world_size, True,
+        distributed, rank, world_size, True, seed=config.train.seed,
     )
     validation_loader, _ = make_loader(
         validation_data, config.train.micro_batch_size, config.train.num_workers,
-        distributed, rank, world_size, False,
+        distributed, rank, world_size, False, seed=config.train.seed,
+        eval_batches=config.train.eval_batches,
     )
     batches = infinite_batches(train_loader, train_sampler)
 
@@ -221,13 +234,18 @@ def main() -> None:
         run = wandb.init(
             project=config.train.wandb_project,
             name=config.train.wandb_run_name,
+            group=config.train.wandb_run_name.rsplit("-seed-", 1)[0],
+            job_type="train",
             mode=config.train.wandb_mode,
             config=config.to_dict(),
         )
         run.summary.update({f"parameters/{key}": value for key, value in summary.items()})
     if rank == 0:
         effective_batch = config.train.micro_batch_size * config.train.gradient_accumulation_steps * world_size
-        print(json.dumps({"device": str(device), "world_size": world_size, "effective_batch": effective_batch, **summary}))
+        print(json.dumps({
+            "seed": config.train.seed, "device": str(device), "world_size": world_size,
+            "effective_batch": effective_batch, **summary,
+        }))
 
     model.train()
     optimizer.zero_grad(set_to_none=True)
@@ -296,8 +314,62 @@ def main() -> None:
                     Path(config.train.output_dir) / "final.pt",
                     model, optimizer, scaler, completed_step, config,
                 )
+                # The final checkpoint supersedes the same run's periodic resume file.
+                (Path(config.train.output_dir) / "latest.pt").unlink(missing_ok=True)
             if run is not None:
                 run.finish()
+
+    del model, optimizer, scaler, train_loader, validation_loader, batches
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Train a dense, standard-MoE, or SplitMoE decoder")
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--smoke-steps", type=int, default=None, help="Override max steps for a quick validation")
+    args = parser.parse_args()
+    base_config = ExperimentConfig.from_json(args.config)
+    if args.smoke_steps is not None:
+        base_config.train.max_steps = args.smoke_steps
+        base_config.train.eval_interval = max(1, args.smoke_steps)
+        base_config.train.save_interval = max(1, args.smoke_steps)
+        base_config.train.wandb_mode = "disabled"
+        base_config.train.seeds = [base_config.train.seed]
+    seeds = base_config.train.seeds
+    if not seeds or len(set(seeds)) != len(seeds):
+        raise ValueError("train.seeds must be a non-empty list of unique integers")
+    if base_config.train.resume and len(seeds) != 1:
+        raise ValueError("Resume supports one seed at a time; set train.seeds to the resumed seed")
+
+    distributed, rank, local_rank, world_size, device = initialize()
+    train_data = TokenBlockDataset(base_config.train.train_data)
+    validation_data = TokenBlockDataset(base_config.train.validation_data)
+    if train_data.block_size != base_config.model.max_seq_len:
+        raise ValueError("Pretokenized block size must equal model.max_seq_len")
+    data_vocab = train_data.metadata.get("vocab_size")
+    if data_vocab is not None and int(data_vocab) != base_config.model.vocab_size:
+        raise ValueError(f"Data vocab_size={data_vocab}, model vocab_size={base_config.model.vocab_size}")
+
+    original_output = Path(base_config.train.output_dir)
+    original_name = base_config.train.wandb_run_name or base_config.model.moe_type
+    try:
+        for run_number, seed in enumerate(seeds, start=1):
+            config = copy.deepcopy(base_config)
+            config.train.seed = int(seed)
+            if len(seeds) > 1:
+                config.train.output_dir = str(original_output / f"seed-{seed}")
+                config.train.wandb_run_name = f"{original_name}-seed-{seed}"
+            if rank == 0:
+                print(f"Starting seed {seed} ({run_number}/{len(seeds)}): {config.train.wandb_run_name}")
+            train_one(
+                config, distributed, rank, local_rank, world_size, device,
+                train_data, validation_data,
+            )
+            if distributed:
+                dist.barrier()
+            gc.collect()
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+    finally:
         cleanup()
 
 
