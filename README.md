@@ -43,11 +43,13 @@ F(x)=\frac{1}{\sqrt{2}}\left(S(x)+P_{i^*}(x)\right),
 
 The shared branch is intended to learn transformations useful to every token, while the routed private branches learn specialized residual transformations. Each token activates width `512 + 512 = 1024`, matching the active width of Dense and Standard MoE, but SplitMoE stores fewer expert parameters than Standard MoE.
 
-| Model | FFN used by one token in a compared layer | Stored conditional paths | Total model parameters |
-| --- | --- | ---: | ---: |
-| Dense | one width-1024 dense FFN | 1 | 46.28M |
-| Standard MoE | one selected width-1024 expert | 4 | 65.16M |
-| SplitMoE | width-512 shared + one selected width-512 private expert | 1 shared + 4 private | 55.72M |
+| Model | FFN used by one token in a compared layer | Stored conditional paths | Total parameters | Activated parameters/token |
+| --- | --- | ---: | ---: | ---: |
+| Dense | one width-1024 dense FFN | 1 | 46.28M | 46.28M |
+| Standard MoE | one selected width-1024 expert | 4 | 65.16M | 46.29M |
+| SplitMoE | width-512 shared + one selected width-512 private expert | 1 shared + 4 private | 55.72M | 46.29M |
+
+“Activated parameters/token” counts all embeddings, attention, dense/shared FFNs, routers, and one selected expert in each MoE layer. The MoE values are 8,192 parameters larger than Dense because their four router projections are also active. This parameter count describes active weights, not exact runtime FLOPs; routing and token dispatch add some overhead.
 
 The primary comparison is therefore at approximately matched active FFN computation, not matched total parameter count. Use `validation/lm_loss` to compare language-model quality; the reported total loss also includes the router auxiliary terms for the MoE variants.
 

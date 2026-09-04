@@ -53,3 +53,19 @@ def test_split_dispatch_under_autocast():
         output = model(inputs, inputs)
     assert torch.isfinite(output.loss)
     output.loss.backward()
+
+
+def test_compute_matched_variants_have_matching_activated_parameters():
+    common = dict(
+        vocab_size=128, max_seq_len=16, n_layers=2, d_model=32, n_heads=4,
+        dense_ffn_width=64, moe_every=1, n_experts=4, standard_expert_width=64,
+        shared_width=32, private_width=32,
+    )
+    summaries = {
+        kind: DecoderLM(ModelConfig(**common, moe_type=kind)).parameter_summary()
+        for kind in ("dense", "standard", "split")
+    }
+    assert summaries["dense"]["activated_per_token"] == summaries["dense"]["total"]
+    assert summaries["standard"]["activated_per_token"] == summaries["split"]["activated_per_token"]
+    router_delta = summaries["standard"]["routers"]
+    assert summaries["standard"]["activated_per_token"] == summaries["dense"]["total"] + router_delta

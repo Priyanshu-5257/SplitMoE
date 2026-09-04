@@ -247,6 +247,18 @@ class DecoderLM(nn.Module):
     def parameter_summary(self) -> dict[str, int]:
         total = sum(p.numel() for p in self.parameters())
         routed = sum(p.numel() for name, p in self.named_parameters() if ".routed.experts." in name)
+        active_routed = sum(
+            sum(p.numel() for p in module.experts[0].parameters())
+            for module in self.modules()
+            if isinstance(module, RoutedExperts)
+        )
         shared = sum(p.numel() for name, p in self.named_parameters() if ".ffn.shared." in name)
         router = sum(p.numel() for name, p in self.named_parameters() if ".router." in name)
-        return {"total": total, "routed_experts": routed, "shared_ffn": shared, "routers": router}
+        activated = total - routed + active_routed
+        return {
+            "total": total,
+            "activated_per_token": activated,
+            "routed_experts": routed,
+            "shared_ffn": shared,
+            "routers": router,
+        }
