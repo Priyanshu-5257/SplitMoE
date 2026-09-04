@@ -53,6 +53,39 @@ The shared branch is intended to learn transformations useful to every token, wh
 
 The primary comparison is therefore at approximately matched active FFN computation, not matched total parameter count. Use `validation/lm_loss` to compare language-model quality; the reported total loss also includes the router auxiliary terms for the MoE variants.
 
+## Initial 4-expert results
+
+All three models were trained for 10,000 optimizer steps on 2×T4 GPUs with the same seed, tokenized data, effective batch size of 64 sequences, and approximately matched activated parameters. Each model reached its best recorded validation loss at step 10,000.
+
+| Model | Total params | Activated params/token | Final validation LM loss ↓ | Perplexity ↓ | Median throughput ↑ | Runtime |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Dense | 46.28M | 46.28M | 1.98686 | 7.2926 | 58.1k tok/s | 50.2 min |
+| Standard MoE | 65.16M | 46.29M | **1.96249** | **7.1170** | 48.2k tok/s | 59.8 min |
+| SplitMoE | 55.72M | 46.29M | 1.96582 | 7.1407 | 45.1k tok/s | 63.7 min |
+
+![Dense, Standard MoE, and SplitMoE validation-loss curves](results/validation_convergence.png)
+
+Both MoE variants beat Dense at all 40 validation checkpoints. Standard MoE achieved the best final loss. SplitMoE finished only `0.00333` LM-loss points (about 0.17%) behind Standard while storing 9.44M fewer parameters—a 14.5% reduction in total parameters. This run therefore supports a parameter-efficiency result, not a claim that SplitMoE already improves raw quality over Standard MoE.
+
+![Stored parameters, activated parameters, and measured training throughput](results/efficiency.png)
+
+The current routed-expert implementation prioritizes clarity over fused-kernel performance. SplitMoE's two FFN paths and Python-level dispatch make it about 6.5% slower than Standard MoE in this experiment even though their theoretical active FFN widths match.
+
+![Shared-to-private activation norm ratio during SplitMoE training](results/split_norm_ratio.png)
+
+The shared/private norm ratio remains in a usable range rather than collapsing to an overwhelmingly shared solution. Over the final 1,000 steps, its mean was approximately 1.29, 1.25, 1.02, and 1.84 in MoE layers 2, 4, 6, and 8 respectively. Expert utilization also remained close to 25% per expert, with no dead experts.
+
+> **Validation limitation:** these first results use the first 50 DDP validation batches. Because pretokenized blocks were written in source order, that slice contains stories only; the zero code/math/wiki routing entries in W&B confirm this. The comparison is controlled because all models used the same slice, but these numbers must not be presented as balanced four-domain validation. A stratified per-domain evaluation of the saved checkpoints is required next. This is also a single-seed result.
+
+The underlying exports are committed as [`summary.json`](results/summary.json), [`validation_history.csv`](results/validation_history.csv), and [`split_norm_history.csv`](results/split_norm_history.csv). Source runs: [Dense](https://wandb.ai/hbpkillerx/splitmoe/runs/3ewbsmej), [Standard MoE](https://wandb.ai/hbpkillerx/splitmoe/runs/qi97vvu9), and [SplitMoE](https://wandb.ai/hbpkillerx/splitmoe/runs/pp7z3b7x).
+
+Regenerate the committed exports and figures with:
+
+```bash
+pip install -e '.[analysis]'
+python scripts/export_results.py
+```
+
 ## Kaggle: pull and run
 
 Enable both T4 GPUs and internet in the Kaggle notebook settings, then run:

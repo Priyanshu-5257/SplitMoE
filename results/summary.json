@@ -1,0 +1,62 @@
+{
+  "generated_from": "https://wandb.ai/hbpkillerx/splitmoe",
+  "validation_scope": "First 50 DDP validation batches; due source-ordered storage this slice contains stories only.",
+  "runs": {
+    "Dense": {
+      "run_id": "3ewbsmej",
+      "url": "https://wandb.ai/hbpkillerx/splitmoe/runs/3ewbsmej",
+      "total_parameters": 46277120,
+      "activated_parameters_per_token": 46277120,
+      "best_step": 10000,
+      "best_validation_lm_loss": 1.98685884475708,
+      "final_validation_lm_loss": 1.98685884475708,
+      "final_validation_perplexity": 7.292590587978247,
+      "median_tokens_per_second": 58122.05939614982,
+      "runtime_seconds": 3009.840528467
+    },
+    "Standard MoE": {
+      "run_id": "qi97vvu9",
+      "url": "https://wandb.ai/hbpkillerx/splitmoe/runs/qi97vvu9",
+      "total_parameters": 65159680,
+      "activated_parameters_per_token": 46285312,
+      "best_step": 10000,
+      "best_validation_lm_loss": 1.9624910354614258,
+      "final_validation_lm_loss": 1.9624910354614258,
+      "final_validation_perplexity": 7.117033785506116,
+      "median_tokens_per_second": 48212.76275725992,
+      "runtime_seconds": 3589.306640915
+    },
+    "SplitMoE": {
+      "run_id": "pp7z3b7x",
+      "url": "https://wandb.ai/hbpkillerx/splitmoe/runs/pp7z3b7x",
+      "total_parameters": 55722496,
+      "activated_parameters_per_token": 46285312,
+      "best_step": 10000,
+      "best_validation_lm_loss": 1.9658175706863403,
+      "final_validation_lm_loss": 1.9658175706863403,
+      "final_validation_perplexity": 7.140748270757393,
+      "median_tokens_per_second": 45100.41234917847,
+      "runtime_seconds": 3821.436831524
+    }
+  },
+  "paired_comparisons": {
+    "Standard MoE_minus_Dense": {
+      "mean_lm_loss_delta": -0.029573538899421693,
+      "final_lm_loss_delta": -0.024367809295654297,
+      "right_better_evaluations": 40,
+      "evaluation_count": 40
+    },
+    "SplitMoE_minus_Dense": {
+      "mean_lm_loss_delta": -0.023073863983154298,
+      "final_lm_loss_delta": -0.021041274070739746,
+      "right_better_evaluations": 40,
+      "evaluation_count": 40
+    },
+    "SplitMoE_minus_Standard MoE": {
+      "mean_lm_loss_delta": 0.006499674916267395,
+      "final_lm_loss_delta": 0.0033265352249145508,
+      "right_better_evaluations": 2,
+      "evaluation_count": 40
+    }
+  }
+}
