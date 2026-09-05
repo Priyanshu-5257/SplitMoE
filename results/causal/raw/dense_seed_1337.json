@@ -1,0 +1,24 @@
+{
+  "architecture": "dense",
+  "seed": 1337,
+  "checkpoint_step": 10000,
+  "evaluation": {
+    "blocks_per_domain": 16,
+    "selection": "Evenly spaced deterministic sample within each validation domain",
+    "wrong_expert": "Per-token deterministic assignment to a guaranteed non-selected expert",
+    "ablation_scale": "Retains the trained SplitMoE output scale"
+  },
+  "ablations": {
+    "normal": {
+      "lm_loss": 3.1596952551044524,
+      "perplexity": 23.56341400465671,
+      "domains": {
+        "stories": 2.1783460527658463,
+        "wiki": 4.229926615953445,
+        "code": 2.382145280018449,
+        "math": 3.848363071680069
+      }
+    }
+  },
+  "similarities": {}
+}

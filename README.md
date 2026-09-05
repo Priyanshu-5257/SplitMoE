@@ -86,7 +86,34 @@ Over the final 1,000 steps, the five-seed mean ratios in Transformer layers 2, 4
 
 ![Shared-to-private activation norm ratio across five seeds](results/five_seed/split_norm_ratio.png)
 
-Activation magnitude alone does not establish functional complementarity. The strongest next tests are shared-only/private-only loss ablations, wrong-expert substitution, expert-output similarity on identical hidden states, and a preregistered non-inferiority margin.
+Activation magnitude alone does not establish functional complementarity, so we tested the saved checkpoints directly.
+
+### Post-training causal validation
+
+For every seed, we evaluated 16 evenly spaced validation blocks from each domain under several interventions. All ablations retain the output scale learned during training. A wrong-expert intervention keeps the router's original choice for measurement but replaces the selected expert with a deterministic, guaranteed-different expert for every token.
+
+| Model and intervention | Mean LM loss | Increase from normal | 95% CI of increase | Positive seeds |
+| --- | ---: | ---: | ---: | ---: |
+| Standard MoE, normal | 3.139 | — | — | — |
+| Standard MoE, wrong expert | 3.689 | +0.550 | [+0.542, +0.557] | 5/5 |
+| SplitMoE, normal | 3.141 | — | — | — |
+| SplitMoE, wrong private expert | 3.432 | +0.291 | [+0.272, +0.311] | 5/5 |
+| SplitMoE, shared only | 3.408 | +0.267 | [+0.248, +0.285] | 5/5 |
+| SplitMoE, private only | 3.593 | +0.452 | [+0.373, +0.531] | 5/5 |
+
+![Causal intervention loss penalties](results/causal/causal_penalties.png)
+
+Both SplitMoE branches are necessary: removing either one causes a substantial loss increase in every seed. More importantly, using the wrong private expert is worse than omitting the private path entirely by a mean of `0.0246` loss, with a paired 95% CI of `[0.0169, 0.0323]`. The router is therefore selecting private transformations that are conditionally useful rather than interchangeable half-width FFNs.
+
+Correct routing matters in stories, Wikipedia, code, and mathematics. Standard MoE's larger wrong-expert penalty should not be interpreted as proportionally stronger specialization because that intervention replaces its entire width-1024 FFN, while SplitMoE retains its shared branch and replaces only the width-512 private component.
+
+![Wrong-expert penalty by validation domain](results/causal/wrong_expert_by_domain.png)
+
+We also ran every routed expert on matched, domain-balanced examples and measured mean off-diagonal expert-pair similarity. Split private experts have lower overall centered cosine similarity (`0.029` versus `0.130`) and lower linear CKA (`0.369` versus `0.445`) than Standard experts. The paired Split-minus-Standard 95% intervals are `[−0.107, −0.094]` for cosine and `[−0.101, −0.053]` for CKA.
+
+![Expert-output similarity across layers](results/causal/expert_similarity.png)
+
+Together, these results support two parts of the original mechanism: the private experts are functionally routing-dependent, and their outputs are less redundant after introducing a shared component. They still do not prove that the shared path represents “common knowledge” in a semantic sense. The interventions are out of distribution, the causal evaluation uses a fixed 64-block diagnostic subset, and similarity is measured on each model's native hidden states. The next architectural control is a total-parameter-matched Standard MoE with width-640 experts.
 
 ## Architectures compared
 
