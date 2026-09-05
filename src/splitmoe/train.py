@@ -322,53 +322,97 @@ def train_one(config, distributed, rank, local_rank, world_size, device, train_d
     del model, optimizer, scaler, train_loader, validation_loader, batches
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Train a dense, standard-MoE, or SplitMoE decoder")
-    parser.add_argument("--config", required=True)
-    parser.add_argument("--smoke-steps", type=int, default=None, help="Override max steps for a quick validation")
-    args = parser.parse_args()
-    base_config = ExperimentConfig.from_json(args.config)
-    if args.smoke_steps is not None:
-        base_config.train.max_steps = args.smoke_steps
-        base_config.train.eval_interval = max(1, args.smoke_steps)
-        base_config.train.save_interval = max(1, args.smoke_steps)
-        base_config.train.wandb_mode = "disabled"
-        base_config.train.seeds = [base_config.train.seed]
+def load_experiment_configs(path: str | Path) -> list[ExperimentConfig]:
+    path = Path(path)
+    raw = json.loads(path.read_text())
+    references = raw.get("experiments")
+    if references is None:
+        return [ExperimentConfig.from_dict(raw)]
+    if not references or not all(isinstance(reference, str) for reference in references):
+        raise ValueError("A suite config must contain a non-empty list of experiment paths")
+    configs = []
+    for reference in references:
+        child_path = path.parent / reference
+        child_raw = json.loads(child_path.read_text())
+        if "experiments" in child_raw:
+            raise ValueError(f"Nested experiment suites are not supported: {child_path}")
+        configs.append(ExperimentConfig.from_dict(child_raw))
+    names = [config.train.wandb_run_name or config.model.moe_type for config in configs]
+    outputs = [config.train.output_dir for config in configs]
+    if len(names) != len(set(names)) or len(outputs) != len(set(outputs)):
+        raise ValueError("Suite experiments must use unique run names and output directories")
+    return configs
+
+
+def run_seed_suite(base_config, distributed, rank, local_rank, world_size, device, train_data, validation_data):
     seeds = base_config.train.seeds
     if not seeds or len(set(seeds)) != len(seeds):
         raise ValueError("train.seeds must be a non-empty list of unique integers")
     if base_config.train.resume and len(seeds) != 1:
         raise ValueError("Resume supports one seed at a time; set train.seeds to the resumed seed")
 
-    distributed, rank, local_rank, world_size, device = initialize()
-    train_data = TokenBlockDataset(base_config.train.train_data)
-    validation_data = TokenBlockDataset(base_config.train.validation_data)
-    if train_data.block_size != base_config.model.max_seq_len:
-        raise ValueError("Pretokenized block size must equal model.max_seq_len")
-    data_vocab = train_data.metadata.get("vocab_size")
-    if data_vocab is not None and int(data_vocab) != base_config.model.vocab_size:
-        raise ValueError(f"Data vocab_size={data_vocab}, model vocab_size={base_config.model.vocab_size}")
-
     original_output = Path(base_config.train.output_dir)
     original_name = base_config.train.wandb_run_name or base_config.model.moe_type
+    for run_number, seed in enumerate(seeds, start=1):
+        config = copy.deepcopy(base_config)
+        config.train.seed = int(seed)
+        if len(seeds) > 1:
+            config.train.output_dir = str(original_output / f"seed-{seed}")
+            config.train.wandb_run_name = f"{original_name}-seed-{seed}"
+        if rank == 0:
+            print(f"Starting seed {seed} ({run_number}/{len(seeds)}): {config.train.wandb_run_name}")
+        train_one(
+            config, distributed, rank, local_rank, world_size, device,
+            train_data, validation_data,
+        )
+        if distributed:
+            dist.barrier()
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Train one experiment or a sequential experiment suite")
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--smoke-steps", type=int, default=None, help="Override max steps for a quick validation")
+    args = parser.parse_args()
+    experiment_configs = load_experiment_configs(args.config)
+    for config in experiment_configs:
+        if args.smoke_steps is not None:
+            config.train.max_steps = args.smoke_steps
+            config.train.eval_interval = max(1, args.smoke_steps)
+            config.train.save_interval = max(1, args.smoke_steps)
+            config.train.wandb_mode = "disabled"
+            config.train.seeds = [config.train.seed]
+    data_locations = {
+        (config.train.train_data, config.train.validation_data) for config in experiment_configs
+    }
+    if len(data_locations) != 1:
+        raise ValueError("Every experiment in a suite must use the same train and validation data")
+
+    distributed, rank, local_rank, world_size, device = initialize()
+    train_path, validation_path = next(iter(data_locations))
+    train_data = TokenBlockDataset(train_path)
+    validation_data = TokenBlockDataset(validation_path)
     try:
-        for run_number, seed in enumerate(seeds, start=1):
-            config = copy.deepcopy(base_config)
-            config.train.seed = int(seed)
-            if len(seeds) > 1:
-                config.train.output_dir = str(original_output / f"seed-{seed}")
-                config.train.wandb_run_name = f"{original_name}-seed-{seed}"
-            if rank == 0:
-                print(f"Starting seed {seed} ({run_number}/{len(seeds)}): {config.train.wandb_run_name}")
-            train_one(
-                config, distributed, rank, local_rank, world_size, device,
+        for experiment_number, base_config in enumerate(experiment_configs, start=1):
+            if train_data.block_size != base_config.model.max_seq_len:
+                raise ValueError("Pretokenized block size must equal model.max_seq_len")
+            data_vocab = train_data.metadata.get("vocab_size")
+            if data_vocab is not None and int(data_vocab) != base_config.model.vocab_size:
+                raise ValueError(
+                    f"Data vocab_size={data_vocab}, model vocab_size={base_config.model.vocab_size}"
+                )
+            if rank == 0 and len(experiment_configs) > 1:
+                print(
+                    f"Starting experiment {experiment_number}/{len(experiment_configs)}: "
+                    f"{base_config.train.wandb_run_name}"
+                )
+            run_seed_suite(
+                base_config, distributed, rank, local_rank, world_size, device,
                 train_data, validation_data,
             )
-            if distributed:
-                dist.barrier()
-            gc.collect()
-            if device.type == "cuda":
-                torch.cuda.empty_cache()
     finally:
         cleanup()
 

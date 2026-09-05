@@ -1,0 +1,39 @@
+{
+  "model": {
+    "vocab_size": 49152,
+    "max_seq_len": 256,
+    "n_layers": 8,
+    "d_model": 512,
+    "n_heads": 8,
+    "dense_ffn_width": 1024,
+    "moe_every": 2,
+    "moe_type": "split",
+    "n_experts": 4,
+    "standard_expert_width": 1024,
+    "shared_width": 768,
+    "private_width": 256,
+    "router_weight_mode": "straight_through",
+    "router_aux_loss_coef": 0.01,
+    "router_z_loss_coef": 0.001
+  },
+  "train": {
+    "train_data": "data/train",
+    "validation_data": "data/validation",
+    "output_dir": "checkpoints/split-75",
+    "seeds": [1337, 2027, 3407, 4517, 5651],
+    "micro_batch_size": 8,
+    "gradient_accumulation_steps": 4,
+    "max_steps": 10000,
+    "eval_interval": 250,
+    "eval_batches": 50,
+    "log_interval": 10,
+    "save_interval": 500,
+    "learning_rate": 0.0003,
+    "warmup_steps": 500,
+    "precision": "fp16",
+    "num_workers": 2,
+    "wandb_project": "splitmoe-width-sweep",
+    "wandb_run_name": "split-75",
+    "wandb_mode": "online"
+  }
+}

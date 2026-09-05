@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import subprocess
@@ -18,6 +19,7 @@ def main() -> None:
     parser.add_argument("--ddp", action="store_true", help="Run with two local DDP workers")
     parser.add_argument("--fp16", action="store_true", help="Use FP16 (requires CUDA)")
     parser.add_argument("--multi-seed", action="store_true", help="Exercise sequential seed orchestration")
+    parser.add_argument("--suite", action="store_true", help="Exercise sequential experiment orchestration")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="splitmoe-smoke-") as temporary:
         root = Path(temporary)
@@ -39,8 +41,25 @@ def main() -> None:
                 "wandb_mode": "disabled",
             },
         }
+        output_directories = [root / "checkpoints"]
         config_path = root / "smoke.json"
-        config_path.write_text(json.dumps(config))
+        if args.suite:
+            references = []
+            output_directories = []
+            for name, shared, private in (("split-25", 16, 48), ("split-75", 48, 16)):
+                variant = copy.deepcopy(config)
+                variant["model"]["shared_width"] = shared
+                variant["model"]["private_width"] = private
+                output = root / "checkpoints" / name
+                variant["train"]["output_dir"] = str(output)
+                variant["train"]["wandb_run_name"] = name
+                variant_path = root / f"{name}.json"
+                variant_path.write_text(json.dumps(variant))
+                references.append(variant_path.name)
+                output_directories.append(output)
+            config_path.write_text(json.dumps({"experiments": references}))
+        else:
+            config_path.write_text(json.dumps(config))
         command = [sys.executable]
         if args.ddp:
             command += ["-m", "torch.distributed.run", "--standalone", "--nproc_per_node=2"]
@@ -49,12 +68,14 @@ def main() -> None:
         if args.ddp:
             environment["CUDA_VISIBLE_DEVICES"] = ""
         subprocess.run(command, check=True, env=environment)
-        if args.multi_seed:
-            assert (root / "checkpoints" / "seed-11" / "final.pt").exists()
-            assert (root / "checkpoints" / "seed-22" / "final.pt").exists()
-        else:
-            assert (root / "checkpoints" / "final.pt").exists()
-    print(f"SplitMoE {'DDP ' if args.ddp else ''}end-to-end smoke test passed")
+        for output in output_directories:
+            if args.multi_seed:
+                assert (output / "seed-11" / "final.pt").exists()
+                assert (output / "seed-22" / "final.pt").exists()
+            else:
+                assert (output / "final.pt").exists()
+    qualifiers = " ".join(label for enabled, label in ((args.ddp, "DDP"), (args.suite, "suite")) if enabled)
+    print(f"SplitMoE {qualifiers} end-to-end smoke test passed")
 
 
 if __name__ == "__main__":

@@ -199,7 +199,7 @@ The completed three-model experiment can be reproduced with the following comman
 ```bash
 torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/dense.json
 torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/standard_1024.json
-torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/split.json
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/split_50.json
 ```
 
 Runs are logged to the W&B project [`splitmoe-seeds`](https://wandb.ai/hbpkillerx/splitmoe-seeds). Names and checkpoint directories include the seed, for example `split-50-seed-1337` and `checkpoints/split/seed-1337/final.pt`.
@@ -219,6 +219,24 @@ torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/stan
 ```
 
 This runs the same five seeds and training schedule, writes checkpoints under `checkpoints/standard-640`, and logs separately to the W&B project `splitmoe-param-matched` with names such as `standard-640-seed-1337`. Dense and Split do not need to be retrained: compare the new runs against their existing `splitmoe-seeds` results. The original width-1024 Standard configuration remains available as `configs/standard_1024.json`.
+
+### Next experiment: shared/private width sweep
+
+The active `configs/split.json` is now a sequential experiment suite containing the two missing active-width decompositions. The completed 512/512 runs are reused rather than trained again:
+
+| Variant | Shared width | Private width | Active width | Total params | Activated params/token |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Split-25 | 256 | 768 | 1024 | 60,441,088 | 46,285,312 |
+| Split-50 (completed) | 512 | 512 | 1024 | 55,722,496 | 46,285,312 |
+| Split-75 | 768 | 256 | 1024 | 51,003,904 | 46,285,312 |
+
+Rerun the existing Split notebook command without changing its arguments:
+
+```bash
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/split.json
+```
+
+It first trains all five Split-25 seeds and then all five Split-75 seeds. Both variants log to the separate W&B project `splitmoe-width-sweep`; checkpoints are written under `checkpoints/split-25` and `checkpoints/split-75`. Expect approximately twice the runtime of the previous five-seed Split notebook, so this run will be close to a full Kaggle session. The original 512/512 configuration remains available as `configs/split_50.json`.
 
 Each GPU holds a complete model and processes different batches. There is no expert-parallel all-to-all communication, keeping this an architecture experiment rather than a distributed-systems comparison. If T4 memory is tight, lower `micro_batch_size` and increase `gradient_accumulation_steps` by the same factor. T4 should use FP16, not BF16.
 
