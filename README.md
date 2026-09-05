@@ -13,9 +13,7 @@ $$
 Here, $S$ is shared by every expert in the layer and $P_i$ is private to expert $i$. For normalized routing weights, this gives:
 
 $$
-\sum_i p_i(x)E_i(x)
-=
-S(x) + \sum_i p_i(x)P_i(x).
+\sum_i p_i(x)E_i(x) = S(x) + \sum_i p_i(x)P_i(x).
 $$
 
 The common computation now needs to be stored and evaluated only once. The router's job also changes subtly: it chooses the specialization needed **after common capacity has already been provided**.
@@ -23,12 +21,7 @@ The common computation now needs to be stored and evaluated only once. The route
 This repository tests that idea with a controlled SplitMoE layer:
 
 $$
-F_{\mathrm{split}}(x)
-=
-\frac{1}{\sqrt{2}}
-\left(S(x) + P_{i^{\ast}}(x)\right),
-\qquad
-i^{\ast}=\mathop{\mathrm{arg\,max}}_i p_i(x).
+F_{\mathrm{split}}(x) = \frac{1}{\sqrt{2}}\left(S(x) + P_{i^{\ast}}(x)\right), \qquad i^{\ast}=\mathop{\mathrm{arg\,max}}_i p_i(x).
 $$
 
 Rather than adding a full shared expert on top of a normal MoE, SplitMoE divides the same active FFN width between a shared branch and one routed private branch. This lets us ask a precise question:
@@ -104,10 +97,7 @@ All three variants use the same 8-layer decoder-only Transformer with `d_model=5
 Every layer has one ordinary width-1024 SwiGLU FFN:
 
 $$
-F(x)=W_{\mathrm{down}}
-\left(
-\mathrm{silu}(W_{\mathrm{gate}}x)\odot W_{\mathrm{up}}x
-\right).
+F(x)=W_{\mathrm{down}}\left(\mathrm{silu}(W_{\mathrm{gate}}x)\odot W_{\mathrm{up}}x\right).
 $$
 
 Every token uses the same weights. Dense is the control for whether sparse conditional capacity helps at all.
@@ -117,9 +107,7 @@ Every token uses the same weights. Dense is the control for whether sparse condi
 Each replaced layer stores four independent width-1024 experts. A learned router selects exactly one for each token:
 
 $$
-F(x)=E_{i^{\ast}}(x),
-\qquad
-i^{\ast}=\mathop{\mathrm{arg\,max}}_i p_i(x).
+F(x)=E_{i^{\ast}}(x), \qquad i^{\ast}=\mathop{\mathrm{arg\,max}}_i p_i(x).
 $$
 
 Only one expert runs, so the layer activates width 1024 while storing four width-1024 paths.
@@ -129,8 +117,7 @@ Only one expert runs, so the layer activates width 1024 while storing four width
 Each replaced layer stores one width-512 shared FFN and four width-512 private FFNs. Every token uses the shared path and one routed private path:
 
 $$
-F(x)=\frac{1}{\sqrt{2}}
-\left(S(x)+P_{i^{\ast}}(x)\right).
+F(x)=\frac{1}{\sqrt{2}}\left(S(x)+P_{i^{\ast}}(x)\right).
 $$
 
 The activated width is `512 + 512 = 1024`, matching Standard MoE, while the stored width is `512 + 4 × 512 = 2560` instead of `4 × 1024 = 4096`.
@@ -210,13 +197,7 @@ W&B records language-model loss, total loss, overall and per-domain validation p
 `lm_loss` is the next-token cross-entropy used to compare model quality. For MoE models, `loss` additionally includes load-balancing and router z-loss terms:
 
 $$
-L_{\mathrm{total}}
-=
-L_{\mathrm{LM}}
-+
-\lambda_{\mathrm{balance}}L_{\mathrm{balance}}
-+
-\lambda_z L_z.
+L_{\mathrm{total}} = L_{\mathrm{LM}} + \lambda_{\mathrm{balance}}L_{\mathrm{balance}} + \lambda_z L_z.
 $$
 
 Analyze centered pairwise expert-output similarity from a saved checkpoint with:
