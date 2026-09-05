@@ -113,7 +113,7 @@ We also ran every routed expert on matched, domain-balanced examples and measure
 
 ![Expert-output similarity across layers](results/causal/expert_similarity.png)
 
-Together, these results support two parts of the original mechanism: the private experts are functionally routing-dependent, and their outputs are less redundant after introducing a shared component. They still do not prove that the shared path represents “common knowledge” in a semantic sense. The interventions are out of distribution, the causal evaluation uses a fixed 64-block diagnostic subset, and similarity is measured on each model's native hidden states. The next architectural control is a total-parameter-matched Standard MoE with width-640 experts.
+Together, these results support two parts of the original mechanism: the private experts are functionally routing-dependent, and their outputs are less redundant after introducing a shared component. They still do not prove that the shared path represents “common knowledge” in a semantic sense. The interventions are out of distribution, the causal evaluation uses a fixed 64-block diagnostic subset, and similarity is measured on each model's native hidden states.
 
 ## Architectures compared
 
@@ -194,15 +194,31 @@ python -m splitmoe.prepare_data \
 
 The code source uses the script-free Parquet version of `codeparrot/codeparrot-clean`, which is compatible with current Kaggle `datasets` releases. The tokenizer warning about a document exceeding its advertised maximum length is harmless here: preprocessing requests token IDs only and slices them into 257-token blocks before model training.
 
-Launch the three experiments. Each command sequentially runs all five configured seeds while `torchrun` continues to use both GPUs for DDP:
+The completed three-model experiment can be reproduced with the following commands. Each command sequentially runs all five configured seeds while `torchrun` continues to use both GPUs for DDP:
 
 ```bash
 torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/dense.json
-torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/standard.json
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/standard_1024.json
 torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/split.json
 ```
 
 Runs are logged to the W&B project [`splitmoe-seeds`](https://wandb.ai/hbpkillerx/splitmoe-seeds). Names and checkpoint directories include the seed, for example `split-50-seed-1337` and `checkpoints/split/seed-1337/final.pt`.
+
+### Next experiment: total-parameter-matched Standard MoE
+
+The active configuration at `configs/standard.json` now trains width-640 experts. Its stored expert width per replaced layer exactly matches SplitMoE:
+
+$$
+4(640) = 512 + 4(512) = 2560.
+$$
+
+No Kaggle command or `torchrun` argument needs to change—rerun the existing Standard notebook command:
+
+```bash
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/standard.json
+```
+
+This runs the same five seeds and training schedule, writes checkpoints under `checkpoints/standard-640`, and logs separately to the W&B project `splitmoe-param-matched` with names such as `standard-640-seed-1337`. Dense and Split do not need to be retrained: compare the new runs against their existing `splitmoe-seeds` results. The original width-1024 Standard configuration remains available as `configs/standard_1024.json`.
 
 Each GPU holds a complete model and processes different batches. There is no expert-parallel all-to-all communication, keeping this an architecture experiment rather than a distributed-systems comparison. If T4 memory is tight, lower `micro_batch_size` and increase `gradient_accumulation_steps` by the same factor. T4 should use FP16, not BF16.
 
