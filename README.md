@@ -51,7 +51,7 @@ Every result below is the mean of the same five paired seeds after 10,000 optimi
 
 ![Validation quality versus total stored parameters](results/frontier/quality_vs_parameters.png)
 
-The sweep is not monotonic: allocating some width to a shared path helps parameter efficiency, but allocating most of it to the shared path eventually removes too much conditional capacity. Of the tested ratios, **Split-25 is the best operating point**. It has the lowest numerical mean loss, beats Split-50 in all five seeds, and stores 7.2% fewer total parameters than Standard-1024. Within each replaced MoE layer, it stores width `256 + 4 × 768 = 3328` instead of `4 × 1024 = 4096`, an 18.75% reduction.
+The sweep is not monotonic: allocating some width to a shared path helps parameter efficiency, but allocating most of it to the shared path eventually removes too much conditional capacity. **Among the tested shared fractions, Split-25 achieved the lowest observed mean validation loss while using 7.2% fewer total parameters than Standard-1024.** It also beats Split-50 in all five seeds. Within each replaced MoE layer, it stores width `256 + 4 × 768 = 3328` instead of `4 × 1024 = 4096`, an 18.75% reduction.
 
 ![Shared/private active-width allocation sweep](results/frontier/width_sweep.png)
 

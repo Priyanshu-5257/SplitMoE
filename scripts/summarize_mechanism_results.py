@@ -291,7 +291,7 @@ def plot_similarity(values: dict, output_dir: Path) -> None:
             title=titles[metric],
         )
         axis.legend()
-    fig.suptitle("Same-width control isolates the shared/private effect", fontweight="bold")
+    fig.suptitle("Same-width control addresses the expert-width confound", fontweight="bold")
     fig.tight_layout()
     fig.savefig(output_dir / "width_controlled_similarity.png", bbox_inches="tight")
     plt.close(fig)
