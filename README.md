@@ -30,7 +30,7 @@ Rather than adding a full shared expert on top of a normal MoE, SplitMoE divides
 
 ## Result in one sentence
 
-**Across five seeds on a balanced four-domain corpus, Split-25 matched a conventional width-1024 Top-1 MoE within statistical uncertainty while using 18.75% fewer stored MoE-FFN parameters and 7.2% fewer total parameters at the same activated capacity. At exactly matched total parameter count, Split-50 beat a width-640 Standard MoE in all five seeds.**
+**Across five paired seeds, Split-25 reduced stored MoE-FFN parameters by 18.75% at matched activated capacity, with no detected validation-loss degradation relative to Standard-1024. At exactly matched total parameter count, Split-50 beat Standard-640 in all five seeds. Finally, same-width analysis shows that Split-50's private experts are significantly less redundant than conventional width-512 experts.**
 
 This is a positive parameter-efficiency result, not proof that the shared path represents “common knowledge” in a semantic sense. Post-training interventions nevertheless show that both SplitMoE branches matter, correct private-expert routing matters, and the private experts are less redundant than complete Standard experts.
 
@@ -139,30 +139,56 @@ Activation magnitude alone does not establish functional complementarity, so we 
 
 ### Post-training causal validation
 
-For every seed, we evaluated 16 evenly spaced validation blocks from each domain under several interventions. All ablations retain the output scale learned during training. A wrong-expert intervention keeps the router's original choice for measurement but replaces the selected expert with a deterministic, guaranteed-different expert for every token.
+For every seed, we evaluated 16 evenly spaced validation blocks from each of the four domains. For a token routed to expert $i^{\ast}$, the stricter wrong-expert test evaluates all three alternatives $j \ne i^{\ast}$ separately and averages their losses. This removes dependence on any single counterfactual mapping. Router choices are retained for measurement, and SplitMoE ablations retain the output scale used during training.
 
 | Model and intervention | Mean LM loss | Increase from normal | 95% CI of increase | Positive seeds |
 | --- | ---: | ---: | ---: | ---: |
-| Standard MoE, normal | 3.139 | — | — | — |
-| Standard MoE, wrong expert | 3.689 | +0.550 | [+0.542, +0.557] | 5/5 |
-| SplitMoE, normal | 3.141 | — | — | — |
-| SplitMoE, wrong private expert | 3.432 | +0.291 | [+0.272, +0.311] | 5/5 |
-| SplitMoE, shared only | 3.408 | +0.267 | [+0.248, +0.285] | 5/5 |
-| SplitMoE, private only | 3.593 | +0.452 | [+0.373, +0.531] | 5/5 |
+| Standard-640, normal | 3.157 | — | — | — |
+| Standard-640, mean over all wrong experts | 3.611 | +0.454 | [+0.425, +0.483] | 5/5 |
+| Standard-512, normal | 3.167 | — | — | — |
+| Standard-512, mean over all wrong experts | 3.564 | +0.397 | [+0.385, +0.410] | 5/5 |
+| Split-50, normal | 3.141 | — | — | — |
+| Split-50, mean over all wrong private experts | 3.432 | +0.291 | [+0.272, +0.310] | 5/5 |
+| Split-50, shared only | 3.408 | +0.267 | [+0.248, +0.285] | 5/5 |
+| Split-50, private only | 3.593 | +0.452 | [+0.373, +0.531] | 5/5 |
 
-![Causal intervention loss penalties](results/causal/causal_penalties.png)
+![Every wrong-expert alternative increases loss](results/mechanism/all_wrong_experts.png)
 
-Both SplitMoE branches are necessary: removing either one causes a substantial loss increase in every seed. More importantly, using the wrong private expert is worse than omitting the private path entirely by a mean of `0.0246` loss, with a paired 95% CI of `[0.0169, 0.0323]`. The router is therefore selecting private transformations that are conditionally useful rather than interchangeable half-width FFNs.
+Every individual wrong-expert offset raises loss in all five seeds. More importantly, adding the mean wrong private transformation is worse than omitting the private path entirely by `0.02392` loss, with paired 95% CI `[0.01803, 0.02982]`. Thus the result is not an artifact of one convenient wrong-expert mapping: the router selects conditionally useful private transformations, and inappropriate private transformations actively hurt.
 
-Correct routing matters in stories, Wikipedia, code, and mathematics. Standard MoE's larger wrong-expert penalty should not be interpreted as proportionally stronger specialization because that intervention replaces its entire width-1024 FFN, while SplitMoE retains its shared branch and replaces only the width-512 private component.
+The larger penalties for conventional MoEs are not directly comparable measures of specialization because those interventions replace their entire expert, while SplitMoE retains its shared path and replaces only the private component.
 
-![Wrong-expert penalty by validation domain](results/causal/wrong_expert_by_domain.png)
+### Layer-by-layer routing dependence
 
-We also ran every routed expert on matched, domain-balanced examples and measured mean off-diagonal expert-pair similarity. Split private experts have lower overall centered cosine similarity (`0.029` versus `0.130`) and lower linear CKA (`0.369` versus `0.445`) than Standard experts. The paired Split-minus-Standard 95% intervals are `[−0.107, −0.094]` for cosine and `[−0.101, −0.053]` for CKA.
+We next corrupted only one MoE layer at a time, averaging over all three alternative experts while leaving routing in every other layer untouched.
 
-![Expert-output similarity across layers](results/causal/expert_similarity.png)
+| Corrupted layer | Split-50 penalty | 95% CI | Positive seeds |
+| ---: | ---: | ---: | ---: |
+| 2 | +0.04223 | [+0.03400, +0.05046] | 5/5 |
+| 4 | +0.06459 | [+0.04803, +0.08115] | 5/5 |
+| 6 | +0.06840 | [+0.06404, +0.07276] | 5/5 |
+| 8 | +0.04782 | [+0.04444, +0.05120] | 5/5 |
 
-Together, these results support two parts of the original mechanism: the private experts are functionally routing-dependent, and their outputs are less redundant after introducing a shared component. They still do not prove that the shared path represents “common knowledge” in a semantic sense. The interventions are out of distribution, the causal evaluation uses a fixed 64-block diagnostic subset, and similarity is measured on each model's native hidden states.
+![Wrong routing applied to one MoE layer at a time](results/mechanism/layerwise_wrong_expert.png)
+
+Correct private routing matters independently in every replaced layer, with the largest penalties in the middle layers 4 and 6. The four isolated penalties should not be expected to sum to the global intervention because corruptions interact nonlinearly across layers.
+
+### Same-width expert-redundancy control
+
+Our original comparison found lower similarity for width-512 Split private experts than for width-1024 Standard experts, but expert width was a potential confound. We therefore trained a dedicated Standard-512 model and ran every expert on the same domain-balanced hidden states within each checkpoint. Values below are mean off-diagonal expert-pair similarities over layers and domains.
+
+| Routed component | Centered cosine ↓ | Linear CKA ↓ |
+| --- | ---: | ---: |
+| Standard-1024 experts | 0.13013 | 0.44509 |
+| Standard-640 experts | 0.09469 | 0.40184 |
+| Standard-512 experts | 0.08503 | 0.39494 |
+| Split-50 private-512 experts | **0.02941** | **0.36851** |
+
+At exactly matched routed width, the paired Split-minus-Standard difference is `−0.05563` for centered cosine, with 95% CI `[−0.06040, −0.05085]`, and `−0.02643` for linear CKA, with 95% CI `[−0.04467, −0.00818]`. Both intervals exclude zero. Reducing conventional expert width does lower similarity, but width alone does not explain the much lower redundancy among Split private experts.
+
+![Same-width expert similarity control](results/mechanism/width_controlled_similarity.png)
+
+Together, these experiments support two mechanism claims: Split private experts are functionally routing-dependent, and their outputs are less redundant even against conventional experts of the same width. They still do not prove that the shared path represents “common knowledge” in a semantic sense. The interventions are out of distribution, the causal evaluation uses a fixed 64-block diagnostic subset, and similarity is measured on each model's native hidden states.
 
 ## Architectures compared
 
@@ -289,7 +315,7 @@ It first trains all five Split-25 seeds and then all five Split-75 seeds. Both v
 
 ### Same-width expert mechanism control
 
-The dedicated `configs/standard_512.json` configuration trains four conventional width-512 experts. This is not intended as a headline quality baseline: it controls for routed-expert width when comparing the output similarity of Standard experts against the width-512 private experts in Split-50.
+The dedicated `configs/standard_512.json` configuration trains four conventional width-512 experts. This is not intended as a headline quality baseline: it controls for routed-expert width when comparing the output similarity of Standard experts against the width-512 private experts in Split-50. Across five seeds it reached validation loss `3.08721` with 95% CI `[3.08230, 3.09213]`, statistically indistinguishable from Dense in the paired comparison.
 
 ```bash
 torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/standard_512.json
@@ -313,6 +339,24 @@ The parameter-frontier tables, per-seed metrics, and plots are committed under [
 ```bash
 python scripts/export_frontier_results.py
 ```
+
+The stricter causal interventions, exact-width similarity control, per-seed JSON records, aggregate statistics, and figures are committed under [`results/mechanism`](results/mechanism). Pull the Standard-512 training metrics and aggregate checkpoint analyses with:
+
+```bash
+python scripts/export_standard512_results.py
+
+for seed in 1337 2027 3407 4517 5651; do
+  PYTHONPATH=src python scripts/analyze_checkpoint.py \
+    --checkpoint "checkpoints/standard-512/seed-$seed/final.pt" \
+    --validation-data data/validation \
+    --output "results/mechanism/raw/standard512_seed_${seed}.json" \
+    --batch-size 8
+done
+
+python scripts/summarize_mechanism_results.py
+```
+
+The committed mechanism summary combines Standard-512 with analogous Standard-640 and Split-50 records. The original causal export under [`results/causal`](results/causal) used one deterministic counterfactual assignment; the all-alternatives analysis supersedes it.
 
 The earlier single-seed pilot remains under [`results`](results). Its validation slice contained stories only because evaluation consumed the first source-ordered blocks. The five-seed experiment corrected this with a fixed `DomainBalancedSampler`; the pilot should not be used as the headline result.
 
