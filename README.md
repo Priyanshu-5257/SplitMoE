@@ -30,11 +30,60 @@ Rather than adding a full shared expert on top of a normal MoE, SplitMoE divides
 
 ## Result in one sentence
 
-**Across five seeds on a balanced four-domain corpus, SplitMoE matched conventional Top-1 MoE within statistical uncertainty while using 37.5% fewer parameters in the MoE FFNs and 14.5% fewer parameters in the complete model.** Both MoE variants beat Dense in all five paired runs.
+**Across five seeds on a balanced four-domain corpus, Split-25 matched a conventional width-1024 Top-1 MoE within statistical uncertainty while using 18.75% fewer stored MoE-FFN parameters and 7.2% fewer total parameters at the same activated capacity. At exactly matched total parameter count, Split-50 beat a width-640 Standard MoE in all five seeds.**
 
-This is a positive parameter-efficiency result. It is not yet proof that the shared path learned exactly the common knowledge duplicated by standard experts; stronger causal ablations are listed below.
+This is a positive parameter-efficiency result, not proof that the shared path represents “common knowledge” in a semantic sense. Post-training interventions nevertheless show that both SplitMoE branches matter, correct private-expert routing matters, and the private experts are less redundant than complete Standard experts.
 
-## Five-seed results
+## Parameter frontier and width sweep
+
+We tested three allocations of the same active width of 1024: Split-25 uses `256 shared + 768 private`, Split-50 uses `512 + 512`, and Split-75 uses `768 + 256`. Standard-1024 is the zero-shared endpoint. Dense is shown as a useful fully shared reference, although it has no routed private branch and is not literally the same architecture as a 100% split.
+
+Every result below is the mean of the same five paired seeds after 10,000 optimizer steps. The validation set is fixed and balanced across stories, Wikipedia, code, and mathematics.
+
+| Model | Shared/private width | Total params | Activated params/token | Validation LM loss ↓ | 95% CI |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Dense | 1024 / 0 | **46.28M** | 46.28M | 3.08743 | [3.08133, 3.09353] |
+| Split-75 | 768 / 256 | 51.00M | 46.29M | 3.06945 | [3.06585, 3.07304] |
+| Standard-640 | 0 / 640 | 55.72M | **43.93M** | 3.07874 | [3.07647, 3.08100] |
+| Split-50 | 512 / 512 | 55.72M | 46.29M | 3.06436 | [3.05903, 3.06969] |
+| Split-25 | 256 / 768 | 60.44M | 46.29M | **3.05981** | [3.05710, 3.06252] |
+| Standard-1024 | 0 / 1024 | 65.16M | 46.29M | 3.06119 | [3.05812, 3.06426] |
+
+![Validation quality versus total stored parameters](results/frontier/quality_vs_parameters.png)
+
+The sweep is not monotonic: allocating some width to a shared path helps parameter efficiency, but allocating most of it to the shared path eventually removes too much conditional capacity. Of the tested ratios, **Split-25 is the best operating point**. It has the lowest numerical mean loss, beats Split-50 in all five seeds, and stores 7.2% fewer total parameters than Standard-1024. Within each replaced MoE layer, it stores width `256 + 4 × 768 = 3328` instead of `4 × 1024 = 4096`, an 18.75% reduction.
+
+![Shared/private active-width allocation sweep](results/frontier/width_sweep.png)
+
+Paired differences use the same seed on both sides and are reported as `left − right`; negative values favor the model on the left.
+
+| Paired comparison | Mean loss difference | 95% CI | Left wins |
+| --- | ---: | ---: | ---: |
+| Split-25 − Standard-1024 | −0.00138 | [−0.00604, +0.00328] | 3/5 |
+| Split-25 − Split-50 | **−0.00455** | **[−0.00775, −0.00136]** | 5/5 |
+| Split-75 − Split-50 | +0.00508 | [−0.00098, +0.01115] | 0/5 |
+| Split-75 − Dense | **−0.01798** | **[−0.02594, −0.01002]** | 5/5 |
+| Split-50 − Standard-640 | **−0.01437** | **[−0.01982, −0.00893]** | 5/5 |
+| Standard-640 − Dense | **−0.00869** | **[−0.01700, −0.00038]** | 5/5 |
+
+The Split-25 versus Standard-1024 interval crosses zero, so the experiment does not establish that Split-25 is better. It shows that we did not detect a quality loss despite the storage reduction. The equal-storage control is stronger: Split-50 and Standard-640 both contain exactly 55,722,496 parameters, and Split-50 wins every paired seed by a mean of `0.01437` loss. Split-50 does activate 5.4% more full-model parameters per token, so this comparison isolates the value of spending an equal storage budget on shared plus conditional capacity rather than claiming equal compute.
+
+![Paired equal-storage and equal-activation controls](results/frontier/paired_controls.png)
+
+The conclusion is not driven by one domain. Split-25 is numerically best on stories and mathematics, essentially tied with Standard-1024 on Wikipedia, and slightly behind it on code.
+
+| Model | Stories ↓ | Wikipedia ↓ | Code ↓ | Math ↓ |
+| --- | ---: | ---: | ---: | ---: |
+| Standard-1024 | 1.96246 | 4.18445 | **2.46714** | 3.63029 |
+| Split-25 | **1.96054** | **4.18433** | 2.46874 | **3.62519** |
+| Split-50 | 1.96669 | 4.18977 | 2.46847 | 3.63210 |
+| Split-75 | 1.97500 | 4.19850 | 2.46835 | 3.63551 |
+
+![Width-sweep validation performance by domain](results/frontier/domain_loss.png)
+
+The main finding is therefore more specific than “sharing is always better”: **a modest shared component can remove redundant storage without sacrificing quality, but the private experts still need most of the active width.**
+
+## Initial Split-50 comparison
 
 All variants were trained for 10,000 optimizer steps on 2×T4 GPUs using seeds `1337`, `2027`, `3407`, `4517`, and `5651`. They saw the same pretokenized data and used the same fixed, domain-balanced validation sample. Intervals below are two-sided 95% Student's t intervals over the five seeds.
 
@@ -62,9 +111,9 @@ The efficiency gain is concrete: compared with Standard MoE, SplitMoE removes 9.
 
 ![Stored parameters, activated parameters, and measured throughput](results/five_seed/efficiency.png)
 
-### Results by domain
+### Initial models by domain
 
-The validation sample contains equal numbers of blocks from stories, Wikipedia, code, and mathematics. Standard MoE has the lowest mean loss in all four domains, but SplitMoE remains close rather than hiding a large regression in one domain.
+The original three-model comparison used equal numbers of blocks from stories, Wikipedia, code, and mathematics. Standard-1024 had the lowest mean loss in all four domains relative to Dense and Split-50; the later width sweep above found that Split-25 closes or reverses most of those small gaps.
 
 | Model | Stories ↓ | Wikipedia ↓ | Code ↓ | Math ↓ |
 | --- | ---: | ---: | ---: | ---: |
@@ -204,25 +253,25 @@ torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/spli
 
 Runs are logged to the W&B project [`splitmoe-seeds`](https://wandb.ai/hbpkillerx/splitmoe-seeds). Names and checkpoint directories include the seed, for example `split-50-seed-1337` and `checkpoints/split/seed-1337/final.pt`.
 
-### Next experiment: total-parameter-matched Standard MoE
+### Completed control: total-parameter-matched Standard MoE
 
-The active configuration at `configs/standard.json` now trains width-640 experts. Its stored expert width per replaced layer exactly matches SplitMoE:
+The active configuration at `configs/standard.json` trains width-640 experts. Its stored expert width per replaced layer exactly matches Split-50:
 
 $$
 4(640) = 512 + 4(512) = 2560.
 $$
 
-No Kaggle command or `torchrun` argument needs to change—rerun the existing Standard notebook command:
+Reproduce this control with the existing Standard notebook command:
 
 ```bash
 torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/standard.json
 ```
 
-This runs the same five seeds and training schedule, writes checkpoints under `checkpoints/standard-640`, and logs separately to the W&B project `splitmoe-param-matched` with names such as `standard-640-seed-1337`. Dense and Split do not need to be retrained: compare the new runs against their existing `splitmoe-seeds` results. The original width-1024 Standard configuration remains available as `configs/standard_1024.json`.
+This runs the same five seeds and training schedule, writes checkpoints under `checkpoints/standard-640`, and logs separately to the W&B project [`splitmoe-param-matched`](https://wandb.ai/hbpkillerx/splitmoe-param-matched) with names such as `standard-640-seed-1337`. The original width-1024 Standard configuration remains available as `configs/standard_1024.json`.
 
-### Next experiment: shared/private width sweep
+### Completed experiment: shared/private width sweep
 
-The active `configs/split.json` is now a sequential experiment suite containing the two missing active-width decompositions. The completed 512/512 runs are reused rather than trained again:
+The active `configs/split.json` is a sequential experiment suite containing the two additional active-width decompositions. The 512/512 runs use the separate `configs/split_50.json` configuration:
 
 | Variant | Shared width | Private width | Active width | Total params | Activated params/token |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -236,7 +285,7 @@ Rerun the existing Split notebook command without changing its arguments:
 torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/split.json
 ```
 
-It first trains all five Split-25 seeds and then all five Split-75 seeds. Both variants log to the separate W&B project `splitmoe-width-sweep`; checkpoints are written under `checkpoints/split-25` and `checkpoints/split-75`. Expect approximately twice the runtime of the previous five-seed Split notebook, so this run will be close to a full Kaggle session. The original 512/512 configuration remains available as `configs/split_50.json`.
+It first trains all five Split-25 seeds and then all five Split-75 seeds. Both variants log to the separate W&B project [`splitmoe-width-sweep`](https://wandb.ai/hbpkillerx/splitmoe-width-sweep); checkpoints are written under `checkpoints/split-25` and `checkpoints/split-75`.
 
 Each GPU holds a complete model and processes different batches. There is no expert-parallel all-to-all communication, keeping this an architecture experiment rather than a distributed-systems comparison. If T4 memory is tight, lower `micro_batch_size` and increase `gradient_accumulation_steps` by the same factor. T4 should use FP16, not BF16.
 
@@ -247,6 +296,12 @@ The raw per-seed metrics, validation histories, norm histories, aggregate statis
 ```bash
 pip install -e '.[analysis]'
 python scripts/export_seed_results.py
+```
+
+The parameter-frontier tables, per-seed metrics, and plots are committed under [`results/frontier`](results/frontier). Regenerate them from all three public W&B projects with:
+
+```bash
+python scripts/export_frontier_results.py
 ```
 
 The earlier single-seed pilot remains under [`results`](results). Its validation slice contained stories only because evaluation consumed the first source-ordered blocks. The five-seed experiment corrected this with a fixed `DomainBalancedSampler`; the pilot should not be used as the headline result.
