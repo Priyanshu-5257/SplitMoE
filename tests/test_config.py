@@ -33,6 +33,23 @@ def test_standard_640_is_parameter_matched_to_split():
     assert split_summary["activated_per_token"] == 46_285_312
 
 
+def test_standard_512_is_same_width_mechanism_control():
+    root = Path(__file__).parents[1]
+    standard = ExperimentConfig.from_json(root / "configs" / "standard_512.json")
+
+    assert standard.model.moe_type == "standard"
+    assert standard.model.n_experts == 4
+    assert standard.model.standard_expert_width == 512
+    assert standard.train.seeds == [1337, 2027, 3407, 4517, 5651]
+    assert standard.train.wandb_project == "splitmoe-mechanism-control"
+    assert standard.train.wandb_run_name == "standard-512"
+    assert standard.train.output_dir == "checkpoints/standard-512"
+
+    summary = DecoderLM(standard.model).parameter_summary()
+    assert summary["total"] == 52_576_768
+    assert summary["activated_per_token"] == 43_139_584
+
+
 def test_split_width_sweep_suite():
     root = Path(__file__).parents[1]
     configs = load_experiment_configs(root / "configs" / "split.json")

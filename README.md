@@ -287,6 +287,16 @@ torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/spli
 
 It first trains all five Split-25 seeds and then all five Split-75 seeds. Both variants log to the separate W&B project [`splitmoe-width-sweep`](https://wandb.ai/hbpkillerx/splitmoe-width-sweep); checkpoints are written under `checkpoints/split-25` and `checkpoints/split-75`.
 
+### Same-width expert mechanism control
+
+The dedicated `configs/standard_512.json` configuration trains four conventional width-512 experts. This is not intended as a headline quality baseline: it controls for routed-expert width when comparing the output similarity of Standard experts against the width-512 private experts in Split-50.
+
+```bash
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/standard_512.json
+```
+
+It runs the same five seeds and training schedule, writes checkpoints under `checkpoints/standard-512`, and logs separately to the W&B project [`splitmoe-mechanism-control`](https://wandb.ai/hbpkillerx/splitmoe-mechanism-control) with run names such as `standard-512-seed-1337`.
+
 Each GPU holds a complete model and processes different batches. There is no expert-parallel all-to-all communication, keeping this an architecture experiment rather than a distributed-systems comparison. If T4 memory is tight, lower `micro_batch_size` and increase `gradient_accumulation_steps` by the same factor. T4 should use FP16, not BF16.
 
 ## Reproduce the result exports
