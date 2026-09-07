@@ -17,6 +17,7 @@ class ModelConfig:
     moe_every: int = 2
     moe_type: str = "split"  # dense, standard, split
     n_experts: int = 4
+    top_k: int = 1
     standard_expert_width: int = 1024
     shared_width: int = 512
     private_width: int = 512
@@ -37,6 +38,8 @@ class ModelConfig:
             raise ValueError(f"Unknown router_weight_mode: {self.router_weight_mode}")
         if min(self.n_layers, self.d_model, self.n_heads, self.max_seq_len) <= 0:
             raise ValueError("Model dimensions must be positive")
+        if not 1 <= self.top_k <= self.n_experts:
+            raise ValueError("top_k must be between 1 and n_experts")
 
 
 @dataclass

@@ -122,7 +122,9 @@ def evaluate(model, loader, device, cfg, domain_names, distributed):
                 )
             for layer_id, stats in enumerate(output.router_stats):
                 assignments = stats.assignments
-                token_domains = domains[:, None].expand_as(assignments)
+                token_domains = domains.view(
+                    domains.size(0), *([1] * (assignments.ndim - 1))
+                ).expand_as(assignments)
                 for domain_id in range(len(domain_names)):
                     selected = assignments[token_domains == domain_id]
                     if selected.numel():

@@ -44,11 +44,12 @@ class RouterStats:
     private_norm: torch.Tensor | None = None
 
 
-class Top1Router(nn.Module):
-    def __init__(self, dim: int, n_experts: int, jitter: float = 0.0):
+class TopKRouter(nn.Module):
+    def __init__(self, dim: int, n_experts: int, top_k: int, jitter: float = 0.0):
         super().__init__()
         self.proj = nn.Linear(dim, n_experts, bias=False)
         self.n_experts = n_experts
+        self.top_k = top_k
         self.jitter = jitter
 
     def forward(self, x: torch.Tensor, collect_assignments: bool = False):
@@ -57,8 +58,9 @@ class Top1Router(nn.Module):
             router_x = x * torch.empty_like(x).uniform_(1 - self.jitter, 1 + self.jitter)
         logits = self.proj(router_x).float()
         probs = logits.softmax(dim=-1)
-        indices = probs.argmax(dim=-1)
-        selected = probs.gather(-1, indices.unsqueeze(-1)).squeeze(-1)
+        selected, indices = probs.topk(self.top_k, dim=-1)
+        if self.top_k > 1:
+            selected = selected / selected.sum(dim=-1, keepdim=True).clamp_min(1e-9)
         one_hot = F.one_hot(indices, self.n_experts).float()
         fraction = one_hot.mean(dim=tuple(range(one_hot.ndim - 1)))
         mean_prob = probs.mean(dim=tuple(range(probs.ndim - 1)))
@@ -72,6 +74,11 @@ class Top1Router(nn.Module):
             expert_fraction=fraction.detach(),
             assignments=indices.detach() if collect_assignments else None,
         )
+        if self.top_k == 1:
+            indices = indices.squeeze(-1)
+            selected = selected.squeeze(-1)
+            if stats.assignments is not None:
+                stats.assignments = stats.assignments.squeeze(-1)
         return indices, selected, stats
 
 
@@ -83,25 +90,26 @@ class RoutedExperts(nn.Module):
 
     def forward(self, x: torch.Tensor, indices: torch.Tensor, selected: torch.Tensor) -> torch.Tensor:
         flat_x = x.reshape(-1, x.size(-1))
-        flat_indices = indices.reshape(-1)
-        flat_selected = selected.reshape(-1)
+        routes = indices.reshape(flat_x.size(0), -1)
+        gates = selected.reshape(flat_x.size(0), -1)
+        routes_per_token = routes.size(1)
         output = None
         for expert_id, expert in enumerate(self.experts):
-            positions = torch.where(flat_indices == expert_id)[0]
+            positions, slots = torch.where(routes == expert_id)
             if positions.numel() == 0:
                 continue
             expert_out = expert(flat_x.index_select(0, positions))
-            gate = flat_selected.index_select(0, positions)
+            gate = gates[positions, slots]
             if self.weight_mode == "straight_through":
-                gate = gate / gate.detach().clamp_min(1e-6)
+                gate = gate / gate.detach().clamp_min(1e-6) / routes_per_token
             elif self.weight_mode == "none":
-                gate = torch.ones_like(gate)
+                gate = torch.ones_like(gate) / routes_per_token
             expert_out = expert_out * gate.unsqueeze(-1).to(expert_out.dtype)
             if output is None:
                 # Under AMP, the residual stream can be FP32 while Linear outputs
-                # are FP16/BF16. index_copy requires matching source/destination dtypes.
+                # are FP16/BF16. Indexed updates require matching source/destination dtypes.
                 output = torch.zeros(flat_x.shape, device=flat_x.device, dtype=expert_out.dtype)
-            output.index_copy_(0, positions, expert_out)
+            output.index_add_(0, positions, expert_out)
         if output is None:
             raise RuntimeError("Cannot dispatch an empty token tensor")
         return output.view_as(x)
@@ -118,7 +126,7 @@ class RoutedExperts(nn.Module):
 class StandardMoE(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
-        self.router = Top1Router(cfg.d_model, cfg.n_experts, cfg.router_jitter)
+        self.router = TopKRouter(cfg.d_model, cfg.n_experts, cfg.top_k, cfg.router_jitter)
         self.routed = RoutedExperts(
             cfg.d_model, cfg.standard_expert_width, cfg.n_experts, cfg.dropout, cfg.router_weight_mode
         )
@@ -132,7 +140,7 @@ class SplitMoE(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.shared = SwiGLU(cfg.d_model, cfg.shared_width, cfg.dropout)
-        self.router = Top1Router(cfg.d_model, cfg.n_experts, cfg.router_jitter)
+        self.router = TopKRouter(cfg.d_model, cfg.n_experts, cfg.top_k, cfg.router_jitter)
         self.routed = RoutedExperts(
             cfg.d_model, cfg.private_width, cfg.n_experts, cfg.dropout, cfg.router_weight_mode
         )
@@ -248,7 +256,7 @@ class DecoderLM(nn.Module):
         total = sum(p.numel() for p in self.parameters())
         routed = sum(p.numel() for name, p in self.named_parameters() if ".routed.experts." in name)
         active_routed = sum(
-            sum(p.numel() for p in module.experts[0].parameters())
+            self.cfg.top_k * sum(p.numel() for p in module.experts[0].parameters())
             for module in self.modules()
             if isinstance(module, RoutedExperts)
         )

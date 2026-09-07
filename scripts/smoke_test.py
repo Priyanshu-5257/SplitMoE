@@ -20,6 +20,7 @@ def main() -> None:
     parser.add_argument("--fp16", action="store_true", help="Use FP16 (requires CUDA)")
     parser.add_argument("--multi-seed", action="store_true", help="Exercise sequential seed orchestration")
     parser.add_argument("--suite", action="store_true", help="Exercise sequential experiment orchestration")
+    parser.add_argument("--top-k", type=int, default=1, help="Exercise Top-K expert routing")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="splitmoe-smoke-") as temporary:
         root = Path(temporary)
@@ -29,7 +30,8 @@ def main() -> None:
             "model": {
                 "vocab_size": 128, "max_seq_len": 16, "n_layers": 2, "d_model": 32,
                 "n_heads": 4, "dense_ffn_width": 64, "moe_every": 1, "moe_type": "split",
-                "n_experts": 4, "shared_width": 32, "private_width": 32,
+                "n_experts": max(4, args.top_k * 2), "top_k": args.top_k,
+                "shared_width": 32, "private_width": 32,
             },
             "train": {
                 "train_data": str(root / "train"), "validation_data": str(root / "validation"),
@@ -74,7 +76,15 @@ def main() -> None:
                 assert (output / "seed-22" / "final.pt").exists()
             else:
                 assert (output / "final.pt").exists()
-    qualifiers = " ".join(label for enabled, label in ((args.ddp, "DDP"), (args.suite, "suite")) if enabled)
+    qualifiers = " ".join(
+        label
+        for enabled, label in (
+            (args.ddp, "DDP"),
+            (args.suite, "suite"),
+            (args.top_k > 1, f"Top-{args.top_k}"),
+        )
+        if enabled
+    )
     print(f"SplitMoE {qualifiers} end-to-end smoke test passed")
 
 

@@ -323,6 +323,26 @@ torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/stan
 
 It runs the same five seeds and training schedule, writes checkpoints under `checkpoints/standard-512`, and logs separately to the W&B project [`splitmoe-mechanism-control`](https://wandb.ai/hbpkillerx/splitmoe-mechanism-control) with run names such as `standard-512-seed-1337`.
 
+### Exploratory larger-model comparison
+
+Two dedicated configurations scale the backbone to 10 layers at width 640 and the MoE to eight experts with normalized Top-4 routing. This is an exploratory single-seed comparison, not a five-seed confirmatory experiment.
+
+| Variant | Expert decomposition | Total params | Activated params/token |
+| --- | ---: | ---: | ---: |
+| Large Standard-8E-Top4 | `4 × width 1280` active | 158,636,160 | 109,484,160 |
+| Large Split-25-8E-Top4 | `shared 320 + 4 × private 960` active | **137,132,160** | **100,268,160** |
+
+The Split configuration stores 21.875% fewer parameters in its MoE FFNs and 13.6% fewer parameters in the complete model. It also activates 12.5% less MoE-FFN width and 8.4% fewer full-model parameters per token. Selected router probabilities are renormalized across the four active experts before their outputs are combined.
+
+Run the two Kaggle notebooks with:
+
+```bash
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/large_standard_8e_top4.json
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/large_split25_8e_top4.json
+```
+
+Both use seed `1337`, the existing pretokenized data and unchanged 10,000-step schedule. They preserve an effective batch size of 64 sequences using micro-batches of 4 and eight gradient-accumulation steps. Results log separately to the W&B project [`splitmoe-large-8e-top4`](https://wandb.ai/hbpkillerx/splitmoe-large-8e-top4) as `large-standard-8e-top4-seed-1337` and `large-split25-8e-top4-seed-1337`.
+
 Each GPU holds a complete model and processes different batches. There is no expert-parallel all-to-all communication, keeping this an architecture experiment rather than a distributed-systems comparison. If T4 memory is tight, lower `micro_batch_size` and increase `gradient_accumulation_steps` by the same factor. T4 should use FP16, not BF16.
 
 ## Reproduce the result exports
@@ -388,6 +408,7 @@ pytest -q
 python scripts/smoke_test.py
 python scripts/smoke_test.py --ddp
 python scripts/smoke_test.py --multi-seed
+python scripts/smoke_test.py --top-k 4
 ```
 
 The smoke test creates a temporary memory-mapped dataset, performs optimizer steps, evaluates, and saves a checkpoint.
