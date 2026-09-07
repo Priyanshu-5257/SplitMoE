@@ -325,23 +325,23 @@ It runs the same five seeds and training schedule, writes checkpoints under `che
 
 ### Exploratory larger-model comparison
 
-Two dedicated configurations scale the backbone to 10 layers at width 640 and the MoE to eight experts with normalized Top-4 routing. This is an exploratory single-seed comparison, not a five-seed confirmatory experiment.
+Two dedicated configurations scale the backbone to 10 layers at width 640 and the MoE to 16 experts with normalized Top-4 routing. Only 25% of the experts are active for each token. This is an exploratory single-seed comparison, not a five-seed confirmatory experiment.
 
 | Variant | Expert decomposition | Total params | Activated params/token |
 | --- | ---: | ---: | ---: |
-| Large Standard-8E-Top4 | `4 × width 1280` active | 158,636,160 | 109,484,160 |
-| Large Split-25-8E-Top4 | `shared 320 + 4 × private 960` active | **137,132,160** | **100,268,160** |
+| Large Standard-16E-Top4 | `4 × width 1280` active | 256,965,760 | 109,509,760 |
+| Large Split-25-16E-Top4 | `shared 320 + 4 × private 960` active | **210,885,760** | **100,293,760** |
 
-The Split configuration stores 21.875% fewer parameters in its MoE FFNs and 13.6% fewer parameters in the complete model. It also activates 12.5% less MoE-FFN width and 8.4% fewer full-model parameters per token. Selected router probabilities are renormalized across the four active experts before their outputs are combined.
+The Split configuration stores 23.4375% fewer parameters in its MoE FFNs and 17.9% fewer parameters in the complete model. It also activates 18.75% less MoE-FFN width and 8.4% fewer full-model parameters per token. Selected router probabilities are renormalized across the four active experts before their outputs are combined.
 
 Run the two Kaggle notebooks with:
 
 ```bash
-torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/large_standard_8e_top4.json
-torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/large_split25_8e_top4.json
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/large_standard_16e_top4.json
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/large_split25_16e_top4.json
 ```
 
-Both use seed `1337`, the existing pretokenized data and unchanged 10,000-step schedule. They preserve an effective batch size of 64 sequences using micro-batches of 4 and eight gradient-accumulation steps. Results log separately to the W&B project [`splitmoe-large-8e-top4`](https://wandb.ai/hbpkillerx/splitmoe-large-8e-top4) as `large-standard-8e-top4-seed-1337` and `large-split25-8e-top4-seed-1337`.
+Both use seed `1337`, the existing pretokenized data and unchanged 10,000-step schedule. They preserve an effective batch size of 64 sequences using micro-batches of 4 and eight gradient-accumulation steps. Results log separately to the W&B project [`splitmoe-large-16e-top4`](https://wandb.ai/hbpkillerx/splitmoe-large-16e-top4) as `large-standard-16e-top4-seed-1337` and `large-split25-16e-top4-seed-1337`.
 
 Each GPU holds a complete model and processes different batches. There is no expert-parallel all-to-all communication, keeping this an architecture experiment rather than a distributed-systems comparison. If T4 memory is tight, lower `micro_batch_size` and increase `gradient_accumulation_steps` by the same factor. T4 should use FP16, not BF16.
 

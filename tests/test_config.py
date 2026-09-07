@@ -67,16 +67,16 @@ def test_split_width_sweep_suite():
 
 def test_large_top4_configs_are_paired():
     root = Path(__file__).parents[1]
-    standard = ExperimentConfig.from_json(root / "configs" / "large_standard_8e_top4.json")
-    split = ExperimentConfig.from_json(root / "configs" / "large_split25_8e_top4.json")
+    standard = ExperimentConfig.from_json(root / "configs" / "large_standard_16e_top4.json")
+    split = ExperimentConfig.from_json(root / "configs" / "large_split25_16e_top4.json")
 
     for config in (standard, split):
         assert config.model.n_layers == 10
         assert config.model.d_model == 640
-        assert config.model.n_experts == 8
+        assert config.model.n_experts == 16
         assert config.model.top_k == 4
         assert config.train.seeds == [1337]
-        assert config.train.wandb_project == "splitmoe-large-8e-top4"
+        assert config.train.wandb_project == "splitmoe-large-16e-top4"
         assert config.train.micro_batch_size * config.train.gradient_accumulation_steps == 32
     assert split.model.shared_width == 320
     assert split.model.private_width == 960
