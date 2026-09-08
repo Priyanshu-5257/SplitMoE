@@ -343,6 +343,25 @@ torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/larg
 
 Both use seed `1337`, the existing pretokenized data and unchanged 10,000-step schedule. They preserve an effective batch size of 64 sequences using micro-batches of 4 and eight gradient-accumulation steps. Results log separately to the W&B project [`splitmoe-large-16e-top4`](https://wandb.ai/hbpkillerx/splitmoe-large-16e-top4) as `large-standard-16e-top4-seed-1337` and `large-split25-16e-top4-seed-1337`.
 
+### Exploratory all-MoE scaling comparison
+
+The next single-seed comparison expands the model to 12 layers and replaces the FFN in every layer with an MoE (`moe_every = 1`). Both variants use width 640, 16 experts, and normalized Top-4 routing.
+
+| Variant | Expert decomposition | Total params | Activated params/token |
+| --- | ---: | ---: | ---: |
+| XLarge all-MoE Standard | `4 × width 1280` active | 523,280,000 | 169,385,600 |
+| XLarge all-MoE Split-25 | `shared 320 + 4 × private 960` active | **412,688,000** | **147,267,200** |
+
+Split-25 stores 110.59M fewer total parameters (21.13%) and activates 22.12M fewer parameters per token (13.06%). The configs retain the previous effective batch size of 64 sequences by using a micro-batch size of 1 and 32 gradient-accumulation steps on each of two GPUs.
+
+Run both sequentially without changing the existing Kaggle `torchrun` arguments:
+
+```bash
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/xlarge_allmoe_16e_top4.json
+```
+
+Alternatively, run them separately with `configs/xlarge_allmoe_standard_16e_top4.json` and `configs/xlarge_allmoe_split25_16e_top4.json`. Runs log to the separate W&B project `splitmoe-xlarge-allmoe-16e-top4` with variant-specific names and checkpoint directories.
+
 Each GPU holds a complete model and processes different batches. There is no expert-parallel all-to-all communication, keeping this an architecture experiment rather than a distributed-systems comparison. If T4 memory is tight, lower `micro_batch_size` and increase `gradient_accumulation_steps` by the same factor. T4 should use FP16, not BF16.
 
 ## Reproduce the result exports

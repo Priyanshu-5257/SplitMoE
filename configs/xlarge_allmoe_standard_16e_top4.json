@@ -1,0 +1,38 @@
+{
+  "model": {
+    "vocab_size": 49152,
+    "max_seq_len": 256,
+    "n_layers": 12,
+    "d_model": 640,
+    "n_heads": 10,
+    "dense_ffn_width": 1280,
+    "moe_every": 1,
+    "moe_type": "standard",
+    "n_experts": 16,
+    "top_k": 4,
+    "standard_expert_width": 1280,
+    "router_weight_mode": "probability",
+    "router_aux_loss_coef": 0.01,
+    "router_z_loss_coef": 0.001
+  },
+  "train": {
+    "train_data": "data/train",
+    "validation_data": "data/validation",
+    "output_dir": "checkpoints/xlarge-allmoe-standard-16e-top4",
+    "seeds": [1337],
+    "micro_batch_size": 1,
+    "gradient_accumulation_steps": 32,
+    "max_steps": 10000,
+    "eval_interval": 250,
+    "eval_batches": 50,
+    "log_interval": 10,
+    "save_interval": 500,
+    "learning_rate": 0.0003,
+    "warmup_steps": 500,
+    "precision": "fp16",
+    "num_workers": 2,
+    "wandb_project": "splitmoe-xlarge-allmoe-16e-top4",
+    "wandb_run_name": "xlarge-allmoe-standard-16e-top4-seed-1337",
+    "wandb_mode": "online"
+  }
+}

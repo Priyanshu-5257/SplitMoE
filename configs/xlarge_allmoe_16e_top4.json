@@ -1,0 +1,6 @@
+{
+  "experiments": [
+    "xlarge_allmoe_standard_16e_top4.json",
+    "xlarge_allmoe_split25_16e_top4.json"
+  ]
+}
