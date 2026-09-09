@@ -1,0 +1,6 @@
+{
+  "experiments": [
+    "paper_allmoe_standard_1024.json",
+    "paper_allmoe_split25.json"
+  ]
+}

@@ -82,6 +82,42 @@ def test_large_top4_configs_are_paired():
     assert split.model.private_width == 960
 
 
+def test_paper_allmoe_configs_define_clean_controls():
+    root = Path(__file__).parents[1]
+    standard = ExperimentConfig.from_json(root / "configs" / "paper_allmoe_standard_1024.json")
+    split = ExperimentConfig.from_json(root / "configs" / "paper_allmoe_split25.json")
+    storage_control = ExperimentConfig.from_json(
+        root / "configs" / "paper_allmoe_standard_800.json"
+    )
+
+    for config in (standard, split, storage_control):
+        assert config.model.n_layers == 8
+        assert config.model.moe_every == 1
+        assert config.model.n_experts == 8
+        assert config.model.top_k == 1
+        assert config.train.seeds == [1337, 2027, 3407]
+        assert config.train.max_steps == 7500
+        assert config.train.micro_batch_size * config.train.gradient_accumulation_steps == 64
+        assert config.train.wandb_project == "splitmoe-paper-allmoe-8e-top1"
+
+    summaries = {
+        "standard": DecoderLM(standard.model).parameter_summary(),
+        "split": DecoderLM(split.model).parameter_summary(),
+        "storage_control": DecoderLM(storage_control.model).parameter_summary(),
+    }
+    assert summaries["standard"]["activated_per_token"] == summaries["split"][
+        "activated_per_token"
+    ] == 46_309_888
+    assert summaries["split"]["total"] == summaries["storage_control"][
+        "total"
+    ] == 112_370_176
+
+    primary = load_experiment_configs(root / "configs" / "paper_allmoe_primary.json")
+    all_variants = load_experiment_configs(root / "configs" / "paper_allmoe_all.json")
+    assert len(primary) == 2
+    assert len(all_variants) == 3
+
+
 def test_top_k_cannot_exceed_expert_count():
     with pytest.raises(ValueError, match="top_k"):
         ModelConfig(n_experts=4, top_k=5).validate()

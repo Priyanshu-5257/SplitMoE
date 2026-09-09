@@ -362,6 +362,54 @@ torchrun --standalone --nproc_per_node=2 -m splitmoe.train --config configs/xlar
 
 Alternatively, run them separately with `configs/xlarge_allmoe_standard_16e_top4.json` and `configs/xlarge_allmoe_split25_16e_top4.json`. Runs log to the separate W&B project `splitmoe-xlarge-allmoe-16e-top4` with variant-specific names and checkpoint directories.
 
+### Budgeted all-MoE paper controls on Modal
+
+The paper-focused configs use an MoE in all eight Transformer layers, eight experts, Top-1 routing, and three paired seeds. Standard-1024 and Split-25 exactly match activated parameters; Split-25 and Standard-800 exactly match total stored parameters.
+
+| Variant | Total params | Activated params/token | Control |
+| --- | ---: | ---: | --- |
+| Standard-1024 | 134,390,272 | 46,309,888 | conventional MoE |
+| Split-25 | **112,370,176** | 46,309,888 | equal activation |
+| Standard-800 | 112,370,176 | **43,557,376** | equal storage |
+
+The Modal runner stores the pretokenized corpus and resumable checkpoints in the `splitmoe-paper` Volume. Each invocation trains only one variant and seed, resumes an existing `latest.pt`, continues the same W&B run, logs peak VRAM, and replaces the optimizer checkpoint with a model-only checkpoint after successful completion.
+
+```bash
+# One-time data preparation.
+modal run scripts/modal_train.py --action prepare
+
+# Compare short benchmarks before choosing the lowest-cost GPU.
+modal run scripts/modal_train.py --action benchmark --gpu T4 --steps 100 --max-cost 0.25
+modal run scripts/modal_train.py --action benchmark --gpu L4 --steps 100 --max-cost 0.25
+modal run scripts/modal_train.py --action benchmark --gpu A10 --steps 100 --max-cost 0.25
+
+# Inspect durable dataset/checkpoint state without allocating a GPU.
+modal run scripts/modal_train.py --action status
+```
+
+The 100-step benchmark selected T4 as the lowest-cost option for this workload:
+
+| GPU | Median tok/s | Elapsed | Estimated GPU cost |
+| --- | ---: | ---: | ---: |
+| T4 | 10,212 | 174.3 s | **$0.0286** |
+| L4 | 12,660 | 139.6 s | $0.0310 |
+| A10 | **14,464** | **121.9 s** | $0.0373 |
+
+The raw benchmark record is committed as [`results/modal_benchmark.json`](results/modal_benchmark.json). At the measured T4 rate, one 7,500-step run projects to approximately `$2.14` in GPU time and the six primary paired runs to approximately `$12.86`. These are projections rather than spending guarantees; non-GPU Modal charges and full-run validation overhead are additional.
+
+Real training requires a Modal secret named `wandb-secret` containing `WANDB_API_KEY`. A run is launched explicitly so its GPU-time cap is visible:
+
+```bash
+modal run scripts/modal_train.py \
+  --action train \
+  --config paper_allmoe_split25.json \
+  --seed 1337 \
+  --gpu T4 \
+  --max-cost 2.30
+```
+
+The cap estimates GPU charges from the public per-second rate; CPU, memory, storage, and regional multipliers are additional. Run the two primary variants for seeds `1337`, `2027`, and `3407` before spending the remaining budget on Standard-800. Full rationale and stopping rules are in [`PAPER_PLAN.md`](PAPER_PLAN.md).
+
 Each GPU holds a complete model and processes different batches. There is no expert-parallel all-to-all communication, keeping this an architecture experiment rather than a distributed-systems comparison. If T4 memory is tight, lower `micro_batch_size` and increase `gradient_accumulation_steps` by the same factor. T4 should use FP16, not BF16.
 
 ## Reproduce the result exports

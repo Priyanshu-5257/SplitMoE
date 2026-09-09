@@ -1,0 +1,36 @@
+{
+  "date": "2026-09-09",
+  "model_config": "paper_allmoe_standard_1024.json",
+  "steps": 100,
+  "effective_batch_sequences": 64,
+  "sequence_length": 256,
+  "pricing_usd_per_gpu_hour": {
+    "T4": 0.5904,
+    "L4": 0.7992,
+    "A10": 1.1016
+  },
+  "results": {
+    "T4": {
+      "elapsed_seconds": 174.26569702700002,
+      "estimated_gpu_cost_usd": 0.028579574312428004,
+      "median_tokens_per_second": 10211.5,
+      "mean_tokens_per_second": 10153.1
+    },
+    "L4": {
+      "elapsed_seconds": 139.61466129500002,
+      "estimated_gpu_cost_usd": 0.030994454807490003,
+      "median_tokens_per_second": 12660.5,
+      "mean_tokens_per_second": 12585.3
+    },
+    "A10": {
+      "elapsed_seconds": 121.86391982399999,
+      "estimated_gpu_cost_usd": 0.037290359466143994,
+      "median_tokens_per_second": 14463.5,
+      "mean_tokens_per_second": 14388.2
+    }
+  },
+  "selected_gpu": "T4",
+  "projected_cost_per_7500_step_run_usd": 2.1434680734321004,
+  "projected_cost_for_six_primary_runs_usd": 12.860808440592602,
+  "notes": "GPU-only cost estimates use the listed public per-second rates. Modal CPU, memory, storage, and regional charges are not included. Benchmark validation was disabled."
+}

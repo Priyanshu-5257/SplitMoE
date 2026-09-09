@@ -90,6 +90,27 @@ def unwrap_model(model):
     return getattr(result, "_orig_mod", result)
 
 
+def capture_rng_state() -> dict:
+    state = {
+        "python": random.getstate(),
+        "numpy": np.random.get_state(),
+        "torch": torch.get_rng_state(),
+    }
+    if torch.cuda.is_available():
+        state["cuda"] = torch.cuda.get_rng_state_all()
+    return state
+
+
+def restore_rng_state(state: dict | None) -> None:
+    if not state:
+        return
+    random.setstate(state["python"])
+    np.random.set_state(state["numpy"])
+    torch.set_rng_state(state["torch"])
+    if torch.cuda.is_available() and "cuda" in state:
+        torch.cuda.set_rng_state_all(state["cuda"])
+
+
 @torch.no_grad()
 def evaluate(model, loader, device, cfg, domain_names, distributed):
     model.eval()
@@ -179,7 +200,18 @@ def router_metrics(output) -> dict[str, float]:
     return metrics
 
 
-def save_checkpoint(path: Path, model, optimizer, scaler, step, config) -> None:
+def save_checkpoint(
+    path: Path,
+    model,
+    optimizer,
+    scaler,
+    step: int,
+    config,
+    *,
+    wandb_run_id: str | None,
+    batches_consumed: int,
+    world_size: int,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     torch.save(
@@ -189,7 +221,21 @@ def save_checkpoint(path: Path, model, optimizer, scaler, step, config) -> None:
             "scaler": scaler.state_dict(),
             "step": step,
             "config": config.to_dict(),
+            "rng_state": capture_rng_state(),
+            "batches_consumed": batches_consumed,
+            "world_size": world_size,
+            "wandb_run_id": wandb_run_id,
         },
+        temporary,
+    )
+    temporary.replace(path)
+
+
+def save_model_only_checkpoint(path: Path, model, step: int, config) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    torch.save(
+        {"model": unwrap_model(model).state_dict(), "step": step, "config": config.to_dict()},
         temporary,
     )
     temporary.replace(path)
@@ -217,12 +263,31 @@ def train_one(config, distributed, rank, local_rank, world_size, device, train_d
     )
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda" and config.train.precision == "fp16")
     start_step = 0
+    resume_rng_state = None
+    resume_run_id = None
+    batches_consumed = 0
     if config.train.resume:
         checkpoint = torch.load(config.train.resume, map_location=device, weights_only=False)
+        checkpoint_world_size = int(checkpoint.get("world_size", world_size))
+        if checkpoint_world_size != world_size:
+            raise ValueError(
+                f"Checkpoint used world_size={checkpoint_world_size}, current world_size={world_size}"
+            )
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
         scaler.load_state_dict(checkpoint["scaler"])
         start_step = int(checkpoint["step"])
+        batches_consumed = int(
+            checkpoint.get("batches_consumed", start_step * config.train.gradient_accumulation_steps)
+        )
+        expected_batches = start_step * config.train.gradient_accumulation_steps
+        if batches_consumed != expected_batches:
+            raise ValueError(
+                "Resume requires the same gradient_accumulation_steps used by the checkpoint"
+            )
+        resume_rng_state = checkpoint.get("rng_state")
+        resume_run_id = checkpoint.get("wandb_run_id")
+        del checkpoint
     if config.train.compile:
         model = torch.compile(model)
     if distributed:
@@ -236,6 +301,8 @@ def train_one(config, distributed, rank, local_rank, world_size, device, train_d
         run = wandb.init(
             project=config.train.wandb_project,
             name=config.train.wandb_run_name,
+            id=resume_run_id,
+            resume="allow" if resume_run_id else None,
             group=config.train.wandb_run_name.rsplit("-seed-", 1)[0],
             job_type="train",
             mode=config.train.wandb_mode,
@@ -248,6 +315,15 @@ def train_one(config, distributed, rank, local_rank, world_size, device, train_d
             "seed": config.train.seed, "device": str(device), "world_size": world_size,
             "effective_batch": effective_batch, **summary,
         }))
+
+    if batches_consumed:
+        if rank == 0:
+            print(f"Restoring data position by advancing {batches_consumed:,} batches")
+        for _ in range(batches_consumed):
+            next(batches)
+    restore_rng_state(resume_rng_state)
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
 
     model.train()
     optimizer.zero_grad(set_to_none=True)
@@ -290,6 +366,9 @@ def train_one(config, distributed, rank, local_rank, world_size, device, train_d
                     "train/grad_norm": float(grad_norm),
                     "train/tokens_per_second": tokens / elapsed,
                 }
+                if device.type == "cuda":
+                    metrics["system/peak_vram_allocated_bytes"] = torch.cuda.max_memory_allocated(device)
+                    metrics["system/peak_vram_reserved_bytes"] = torch.cuda.max_memory_reserved(device)
                 metrics.update(router_metrics(last_output))
                 if rank == 0:
                     print(f"step {completed_step}: loss={metrics['train/loss']:.4f}, tokens/s={metrics['train/tokens_per_second']:.0f}")
@@ -308,17 +387,42 @@ def train_one(config, distributed, rank, local_rank, world_size, device, train_d
                         run.log(metrics, step=completed_step)
 
             if rank == 0 and completed_step % config.train.save_interval == 0:
-                save_checkpoint(Path(config.train.output_dir) / "latest.pt", model, optimizer, scaler, completed_step, config)
+                save_checkpoint(
+                    Path(config.train.output_dir) / "latest.pt",
+                    model,
+                    optimizer,
+                    scaler,
+                    completed_step,
+                    config,
+                    wandb_run_id=run.id if run is not None else None,
+                    batches_consumed=completed_step * config.train.gradient_accumulation_steps,
+                    world_size=world_size,
+                )
+                print(f"checkpoint {completed_step}: latest.pt saved", flush=True)
     finally:
         if rank == 0:
             if completed_step >= config.train.max_steps:
-                save_checkpoint(
-                    Path(config.train.output_dir) / "final.pt",
-                    model, optimizer, scaler, completed_step, config,
-                )
+                final_path = Path(config.train.output_dir) / "final.pt"
+                if config.train.save_model_only_final:
+                    save_model_only_checkpoint(final_path, model, completed_step, config)
+                else:
+                    save_checkpoint(
+                        final_path,
+                        model,
+                        optimizer,
+                        scaler,
+                        completed_step,
+                        config,
+                        wandb_run_id=run.id if run is not None else None,
+                        batches_consumed=completed_step * config.train.gradient_accumulation_steps,
+                        world_size=world_size,
+                    )
                 # The final checkpoint supersedes the same run's periodic resume file.
                 (Path(config.train.output_dir) / "latest.pt").unlink(missing_ok=True)
             if run is not None:
+                if device.type == "cuda":
+                    run.summary["system/peak_vram_allocated_bytes"] = torch.cuda.max_memory_allocated(device)
+                    run.summary["system/peak_vram_reserved_bytes"] = torch.cuda.max_memory_reserved(device)
                 run.finish()
 
     del model, optimizer, scaler, train_loader, validation_loader, batches

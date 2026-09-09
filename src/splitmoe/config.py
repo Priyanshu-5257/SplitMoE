@@ -67,6 +67,7 @@ class TrainConfig:
     num_workers: int = 2
     compile: bool = False
     resume: str | None = None
+    save_model_only_final: bool = True
     wandb_project: str = "splitmoe"
     wandb_run_name: str | None = None
     wandb_mode: str = "online"  # online, offline, disabled
