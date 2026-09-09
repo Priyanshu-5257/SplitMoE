@@ -397,16 +397,18 @@ The 100-step benchmark selected T4 as the lowest-cost option for this workload:
 
 The raw benchmark record is committed as [`results/modal_benchmark.json`](results/modal_benchmark.json). Training uses two CPU cores and 4 GiB RAM per container. At the measured T4 rate and published Modal resource prices, one 6,500-step run projects to approximately `$2.26` in total compute and the six primary paired runs to approximately `$13.53`. These are projections rather than spending guarantees; storage, optional regional multipliers, and full-run validation/checkpoint overhead may add cost.
 
-Real training requires a Modal secret named `wandb-secret` containing `WANDB_API_KEY`. A run is launched explicitly so its GPU-time cap is visible:
+Real training requires a Modal secret named `wandb-secret` containing `WANDB_API_KEY`. A run is launched explicitly so its total-compute cap is visible:
 
 ```bash
-modal run scripts/modal_train.py \
+modal run --detach scripts/modal_train.py \
   --action train \
   --config paper_allmoe_split25.json \
   --seed 1337 \
   --gpu T4 \
   --max-cost 2.35
 ```
+
+Training uses Modal's durable `Function.spawn()` invocation. Run the command with `modal run --detach scripts/modal_train.py ...`; after it prints a `function_call_id`, the training call no longer depends on the client process and continues if the launching laptop sleeps or disconnects. Re-running the same variant and seed resumes its latest durable checkpoint rather than starting over.
 
 The cap estimates GPU charges from the public per-second rate; CPU, memory, storage, and regional multipliers are additional. Run the two primary variants for seeds `1337`, `2027`, and `3407` before spending the remaining budget on Standard-800. Full rationale and stopping rules are in [`PAPER_PLAN.md`](PAPER_PLAN.md).
 

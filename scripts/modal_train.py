@@ -348,12 +348,30 @@ def main(
                 "secrets": [wandb_secret],
             }
         )
-    result = train_remote.with_options(**options).remote(
-        config_name=config,
-        seed=seed,
-        steps=requested_steps,
-        benchmark=action == "benchmark",
-        micro_batch_size=micro_batch_size,
-        gpu_name=gpu,
-    )
+    invocation = train_remote.with_options(**options)
+    kwargs = {
+        "config_name": config,
+        "seed": seed,
+        "steps": requested_steps,
+        "benchmark": action == "benchmark",
+        "micro_batch_size": micro_batch_size,
+        "gpu_name": gpu,
+    }
+    if action == "train":
+        call = invocation.spawn(**kwargs)
+        print(
+            json.dumps(
+                {
+                    "status": "launched",
+                    "function_call_id": call.object_id,
+                    "config": config,
+                    "seed": seed,
+                    "gpu": gpu,
+                    "max_compute_cost_usd": max_cost,
+                },
+                indent=2,
+            )
+        )
+        return
+    result = invocation.remote(**kwargs)
     print(json.dumps(result, indent=2))
