@@ -30,7 +30,11 @@
     }
   },
   "selected_gpu": "T4",
-  "projected_cost_per_7500_step_run_usd": 2.1434680734321004,
-  "projected_cost_for_six_primary_runs_usd": 12.860808440592602,
-  "notes": "GPU-only cost estimates use the listed public per-second rates. Modal CPU, memory, storage, and regional charges are not included. Benchmark validation was disabled."
+  "planned_training_steps": 6500,
+  "planned_training_cpu_cores": 2,
+  "planned_training_memory_gib": 4,
+  "projected_gpu_cost_per_run_usd": 1.8576723303078202,
+  "projected_total_compute_cost_per_run_usd": 2.2550302904343,
+  "projected_total_compute_cost_for_six_primary_runs_usd": 13.5301817426058,
+  "notes": "Benchmark rows report GPU cost for the original 4-core/16-GiB benchmark containers. Training projections include T4, 2 CPU cores, and 4 GiB memory at public base rates, but exclude storage and any optional regional multiplier. Benchmark validation was disabled."
 }

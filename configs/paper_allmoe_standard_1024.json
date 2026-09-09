@@ -22,7 +22,7 @@
     "seeds": [1337, 2027, 3407],
     "micro_batch_size": 4,
     "gradient_accumulation_steps": 16,
-    "max_steps": 7500,
+    "max_steps": 6500,
     "eval_interval": 250,
     "eval_batches": 50,
     "log_interval": 10,

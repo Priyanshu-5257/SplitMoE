@@ -36,6 +36,10 @@ GPU_HOURLY_USD = {
     "A100-80GB": 2.4984,
     "H100": 3.9492,
 }
+CPU_USD_PER_CORE_SECOND = 0.0000131
+MEMORY_USD_PER_GIB_SECOND = 0.00000222
+TRAIN_CPU_CORES = 2
+TRAIN_MEMORY_MIB = 4096
 
 local_root = Path(__file__).resolve().parents[1]
 image = (
@@ -258,7 +262,12 @@ def train_remote(
     if not benchmark:
         volume.commit()
 
-    hourly_rate = GPU_HOURLY_USD[gpu_name]
+    gpu_hourly_rate = GPU_HOURLY_USD[gpu_name]
+    total_hourly_rate = (
+        gpu_hourly_rate
+        + CPU_USD_PER_CORE_SECOND * TRAIN_CPU_CORES * 3600
+        + MEMORY_USD_PER_GIB_SECOND * (TRAIN_MEMORY_MIB / 1024) * 3600
+    )
     result = {
         "status": "complete",
         "config": config_name,
@@ -266,7 +275,8 @@ def train_remote(
         "steps": raw["train"]["max_steps"],
         "gpu": gpu_name,
         "elapsed_seconds": elapsed,
-        "estimated_gpu_cost_usd": elapsed * hourly_rate / 3600,
+        "estimated_gpu_cost_usd": elapsed * gpu_hourly_rate / 3600,
+        "estimated_compute_cost_usd": elapsed * total_hourly_rate / 3600,
         "median_tokens_per_second": statistics.median(throughputs) if throughputs else None,
         "mean_tokens_per_second": statistics.mean(throughputs) if throughputs else None,
         "output": str(output),
@@ -287,12 +297,16 @@ def volume_status() -> dict:
     return result
 
 
-def _timeout_from_cost(gpu: str, max_cost: float) -> int:
+def _timeout_from_cost(gpu: str, max_cost: float, *, include_train_resources: bool) -> int:
     if gpu not in GPU_HOURLY_USD:
         raise ValueError(f"Unsupported priced GPU {gpu!r}; choose from {sorted(GPU_HOURLY_USD)}")
     if max_cost <= 0:
         raise ValueError("max_cost must be positive")
-    return max(60, min(24 * 60 * 60, math.floor(max_cost / GPU_HOURLY_USD[gpu] * 3600)))
+    hourly_rate = GPU_HOURLY_USD[gpu]
+    if include_train_resources:
+        hourly_rate += CPU_USD_PER_CORE_SECOND * TRAIN_CPU_CORES * 3600
+        hourly_rate += MEMORY_USD_PER_GIB_SECOND * (TRAIN_MEMORY_MIB / 1024) * 3600
+    return max(60, min(24 * 60 * 60, math.floor(max_cost / hourly_rate * 3600)))
 
 
 @app.local_entrypoint()
@@ -316,7 +330,9 @@ def main(
     if action not in {"benchmark", "train"}:
         raise ValueError("action must be prepare, status, benchmark, or train")
 
-    timeout = _timeout_from_cost(gpu, max_cost)
+    timeout = _timeout_from_cost(
+        gpu, max_cost, include_train_resources=action == "train"
+    )
     requested_steps = steps if action == "benchmark" else None
     print(
         f"Launching {action} on {gpu} with a ${max_cost:.2f} GPU-time cap "
@@ -324,7 +340,13 @@ def main(
     )
     options = {"gpu": gpu, "timeout": timeout}
     if action == "train":
-        options["secrets"] = [wandb_secret]
+        options.update(
+            {
+                "cpu": TRAIN_CPU_CORES,
+                "memory": TRAIN_MEMORY_MIB,
+                "secrets": [wandb_secret],
+            }
+        )
     result = train_remote.with_options(**options).remote(
         config_name=config,
         seed=seed,

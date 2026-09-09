@@ -364,7 +364,7 @@ Alternatively, run them separately with `configs/xlarge_allmoe_standard_16e_top4
 
 ### Budgeted all-MoE paper controls on Modal
 
-The paper-focused configs use an MoE in all eight Transformer layers, eight experts, Top-1 routing, and three paired seeds. Standard-1024 and Split-25 exactly match activated parameters; Split-25 and Standard-800 exactly match total stored parameters.
+The paper-focused configs use an MoE in all eight Transformer layers, eight experts, Top-1 routing, 6,500 optimizer steps, and three paired seeds. Standard-1024 and Split-25 exactly match activated parameters; Split-25 and Standard-800 exactly match total stored parameters.
 
 | Variant | Total params | Activated params/token | Control |
 | --- | ---: | ---: | --- |
@@ -395,7 +395,7 @@ The 100-step benchmark selected T4 as the lowest-cost option for this workload:
 | L4 | 12,660 | 139.6 s | $0.0310 |
 | A10 | **14,464** | **121.9 s** | $0.0373 |
 
-The raw benchmark record is committed as [`results/modal_benchmark.json`](results/modal_benchmark.json). At the measured T4 rate, one 7,500-step run projects to approximately `$2.14` in GPU time and the six primary paired runs to approximately `$12.86`. These are projections rather than spending guarantees; non-GPU Modal charges and full-run validation overhead are additional.
+The raw benchmark record is committed as [`results/modal_benchmark.json`](results/modal_benchmark.json). Training uses two CPU cores and 4 GiB RAM per container. At the measured T4 rate and published Modal resource prices, one 6,500-step run projects to approximately `$2.26` in total compute and the six primary paired runs to approximately `$13.53`. These are projections rather than spending guarantees; storage, optional regional multipliers, and full-run validation/checkpoint overhead may add cost.
 
 Real training requires a Modal secret named `wandb-secret` containing `WANDB_API_KEY`. A run is launched explicitly so its GPU-time cap is visible:
 
@@ -405,7 +405,7 @@ modal run scripts/modal_train.py \
   --config paper_allmoe_split25.json \
   --seed 1337 \
   --gpu T4 \
-  --max-cost 2.30
+  --max-cost 2.35
 ```
 
 The cap estimates GPU charges from the public per-second rate; CPU, memory, storage, and regional multipliers are additional. Run the two primary variants for seeds `1337`, `2027`, and `3407` before spending the remaining budget on Standard-800. Full rationale and stopping rules are in [`PAPER_PLAN.md`](PAPER_PLAN.md).

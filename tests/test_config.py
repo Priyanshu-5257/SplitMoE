@@ -96,7 +96,7 @@ def test_paper_allmoe_configs_define_clean_controls():
         assert config.model.n_experts == 8
         assert config.model.top_k == 1
         assert config.train.seeds == [1337, 2027, 3407]
-        assert config.train.max_steps == 7500
+        assert config.train.max_steps == 6500
         assert config.train.micro_batch_size * config.train.gradient_accumulation_steps == 64
         assert config.train.wandb_project == "splitmoe-paper-allmoe-8e-top1"
 
