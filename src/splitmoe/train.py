@@ -106,9 +106,9 @@ def restore_rng_state(state: dict | None) -> None:
         return
     random.setstate(state["python"])
     np.random.set_state(state["numpy"])
-    torch.set_rng_state(state["torch"])
+    torch.set_rng_state(state["torch"].cpu())
     if torch.cuda.is_available() and "cuda" in state:
-        torch.cuda.set_rng_state_all(state["cuda"])
+        torch.cuda.set_rng_state_all([generator_state.cpu() for generator_state in state["cuda"]])
 
 
 @torch.no_grad()

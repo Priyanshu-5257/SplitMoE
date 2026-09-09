@@ -335,7 +335,8 @@ def main(
     )
     requested_steps = steps if action == "benchmark" else None
     print(
-        f"Launching {action} on {gpu} with a ${max_cost:.2f} GPU-time cap "
+        f"Launching {action} on {gpu} with a ${max_cost:.2f} "
+        f"{'total-compute' if action == 'train' else 'GPU-time'} cap "
         f"({timeout / 60:.1f} minutes)"
     )
     options = {"gpu": gpu, "timeout": timeout}
