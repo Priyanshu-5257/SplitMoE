@@ -1,6 +1,7 @@
 import torch
+from torch.utils.data import RandomSampler
 
-from splitmoe.train import capture_rng_state, restore_rng_state
+from splitmoe.train import FastForwardSampler, capture_rng_state, restore_rng_state
 
 
 class FakeMappedState:
@@ -34,3 +35,24 @@ def test_restore_rng_state_moves_checkpoint_tensors_to_cpu(monkeypatch):
     assert cuda_state.cpu_called
     assert restored["cpu"].device.type == "cpu"
     assert restored["cuda"][0].device.type == "cpu"
+
+
+def test_fast_forward_sampler_matches_uninterrupted_random_sampler():
+    dataset = list(range(11))
+    batch_size = 2
+    batches_per_epoch = len(dataset) // batch_size
+
+    reference = RandomSampler(dataset, generator=torch.Generator().manual_seed(17))
+    reference_epochs = [list(reference), list(reference), list(reference)]
+
+    consumed_batches = batches_per_epoch + 2
+    resumed_base = RandomSampler(dataset, generator=torch.Generator().manual_seed(17))
+    resumed = FastForwardSampler(
+        resumed_base,
+        batches_consumed=consumed_batches,
+        batch_size=batch_size,
+    )
+
+    expected_offset = 2 * batch_size
+    assert list(resumed) == reference_epochs[1][expected_offset:]
+    assert list(resumed) == reference_epochs[2]

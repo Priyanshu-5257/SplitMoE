@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import contextlib
 import copy
 import gc
+import itertools
 import json
 import math
 import random
@@ -15,7 +17,7 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data import DataLoader, DistributedSampler, RandomSampler
+from torch.utils.data import DataLoader, DistributedSampler, RandomSampler, Sampler
 
 from .config import ExperimentConfig
 from .data import DomainBalancedSampler, TokenBlockDataset
@@ -31,8 +33,47 @@ def seed_everything(seed: int, rank: int) -> None:
         torch.cuda.manual_seed_all(seed + rank)
 
 
+class FastForwardSampler(Sampler[int]):
+    """Resume a seeded sampler without materializing skipped dataset examples."""
+
+    def __init__(self, sampler: Sampler[int], *, batches_consumed: int, batch_size: int):
+        self.sampler = sampler
+        batches_per_epoch = len(sampler) // batch_size
+        if batches_per_epoch == 0:
+            raise ValueError("Training sampler must contain at least one full batch")
+        completed_epochs, batches_in_epoch = divmod(batches_consumed, batches_per_epoch)
+        for _ in range(completed_epochs):
+            deque(iter(sampler), maxlen=0)
+        self._first_iterator = iter(sampler)
+        self._skipped_samples = batches_in_epoch * batch_size
+        deque(itertools.islice(self._first_iterator, self._skipped_samples), maxlen=0)
+
+    def __iter__(self):
+        if self._first_iterator is not None:
+            iterator = self._first_iterator
+            self._first_iterator = None
+            yield from iterator
+            return
+        yield from self.sampler
+
+    def __len__(self) -> int:
+        if self._first_iterator is not None:
+            return len(self.sampler) - self._skipped_samples
+        return len(self.sampler)
+
+
 def make_loader(
-    dataset, batch_size, workers, distributed, rank, world_size, train, *, seed, eval_batches=None
+    dataset,
+    batch_size,
+    workers,
+    distributed,
+    rank,
+    world_size,
+    train,
+    *,
+    seed,
+    eval_batches=None,
+    resume_batches: int = 0,
 ):
     if not train:
         if eval_batches is None:
@@ -50,6 +91,10 @@ def make_loader(
     else:
         generator = torch.Generator().manual_seed(seed)
         sampler = RandomSampler(dataset, generator=generator)
+        if resume_batches:
+            sampler = FastForwardSampler(
+                sampler, batches_consumed=resume_batches, batch_size=batch_size
+            )
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -318,9 +363,30 @@ def train_one(config, distributed, rank, local_rank, world_size, device, train_d
 
     if batches_consumed:
         if rank == 0:
-            print(f"Restoring data position by advancing {batches_consumed:,} batches")
-        for _ in range(batches_consumed):
-            next(batches)
+            print(f"Restoring data position at {batches_consumed:,} consumed batches")
+        if distributed:
+            # DDP resume remains compatible with existing checkpoints. Modal uses
+            # world_size=1 and takes the constant-memory fast-forward path below.
+            for _ in range(batches_consumed):
+                next(batches)
+        else:
+            del train_loader, batches
+            train_loader, train_sampler = make_loader(
+                train_data,
+                config.train.micro_batch_size,
+                config.train.num_workers,
+                distributed,
+                rank,
+                world_size,
+                True,
+                seed=config.train.seed,
+                resume_batches=batches_consumed,
+            )
+            batches = infinite_batches(train_loader, train_sampler)
+            # Initialize workers before restoring the saved global RNG. Preserve
+            # the first resumed batch so training still consumes it exactly once.
+            first_batch = next(batches)
+            batches = itertools.chain((first_batch,), batches)
     restore_rng_state(resume_rng_state)
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
