@@ -118,6 +118,34 @@ def test_paper_allmoe_configs_define_clean_controls():
     assert len(all_variants) == 3
 
 
+def test_kaggle_allmoe_16e_top4_configs_are_paired_and_isolated():
+    root = Path(__file__).parents[1]
+    seeds = [1337, 2027, 3407]
+    configs = []
+    for architecture in ("standard", "split25"):
+        for seed in seeds:
+            path = root / "configs" / f"kaggle_allmoe_16e_top4_{architecture}_seed{seed}.json"
+            config = ExperimentConfig.from_json(path)
+            configs.append(config)
+            assert config.model.n_layers == 8
+            assert config.model.moe_every == 1
+            assert config.model.n_experts == 16
+            assert config.model.top_k == 4
+            assert config.model.router_weight_mode == "probability"
+            assert config.train.seeds == [seed]
+            assert config.train.micro_batch_size == 4
+            assert config.train.gradient_accumulation_steps == 8
+            assert config.train.micro_batch_size * config.train.gradient_accumulation_steps * 2 == 64
+            assert config.train.max_steps == 6500
+            assert config.train.wandb_project == "splitmoe-paper-allmoe-16e-top4-kaggle"
+
+    split_configs = [config for config in configs if config.model.moe_type == "split"]
+    assert all(config.model.shared_width == 256 for config in split_configs)
+    assert all(config.model.private_width == 768 for config in split_configs)
+    assert len({config.train.output_dir for config in configs}) == 6
+    assert len({config.train.wandb_run_name for config in configs}) == 6
+
+
 def test_top_k_cannot_exceed_expert_count():
     with pytest.raises(ValueError, match="top_k"):
         ModelConfig(n_experts=4, top_k=5).validate()
