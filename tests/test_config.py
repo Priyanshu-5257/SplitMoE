@@ -146,6 +146,35 @@ def test_kaggle_allmoe_16e_top4_configs_are_paired_and_isolated():
     assert len({config.train.wandb_run_name for config in configs}) == 6
 
 
+def test_kaggle_equal_active_top4_split_configs_match_standard_activation():
+    root = Path(__file__).parents[1]
+    seeds = [1337, 2027, 3407]
+    configs = [
+        ExperimentConfig.from_json(
+            root / "configs" / f"kaggle_allmoe_16e_top4_equal_active_split_seed{seed}.json"
+        )
+        for seed in seeds
+    ]
+    for config, seed in zip(configs, seeds, strict=True):
+        assert config.model.moe_type == "split"
+        assert config.model.n_experts == 16
+        assert config.model.top_k == 4
+        assert config.model.shared_width == 256
+        assert config.model.private_width == 960
+        assert config.model.shared_width + config.model.top_k * config.model.private_width == 4096
+        assert config.train.seeds == [seed]
+        assert config.train.micro_batch_size * config.train.gradient_accumulation_steps * 2 == 64
+        assert config.train.wandb_project == "splitmoe-paper-allmoe-16e-top4-equal-active"
+
+    equal_active = DecoderLM(configs[0].model).parameter_summary()
+    standard = ExperimentConfig.from_json(
+        root / "configs" / "kaggle_allmoe_16e_top4_standard_seed1337.json"
+    )
+    standard_summary = DecoderLM(standard.model).parameter_summary()
+    assert equal_active["total"] == 225_649_152
+    assert equal_active["activated_per_token"] == standard_summary["activated_per_token"] == 84_091_392
+
+
 def test_top_k_cannot_exceed_expert_count():
     with pytest.raises(ValueError, match="top_k"):
         ModelConfig(n_experts=4, top_k=5).validate()

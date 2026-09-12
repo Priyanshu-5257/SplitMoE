@@ -71,6 +71,18 @@ The all-MoE scaling suite uses 12 Transformer layers, an MoE in all 12 layers, w
 
 The suite is defined in `configs/xlarge_allmoe_16e_top4.json`. It is a single-seed exploratory gate, not yet confirmatory evidence.
 
+### Preregistered resource-conscious replacement
+
+The interrupted 12-layer XLarge gate is superseded for the first preprint by an 8-layer, width-512, all-MoE experiment with 16 experts and Top-4 routing. This replacement was completed for paired seeds 1337, 2027, and 3407. Standard had mean final validation LM loss `3.11376`; the practical Split-25 configuration had `3.12738`, used 20.1% fewer total parameters and 11.2% fewer activated parameters, and had a paired difference of `+0.01362` with 95% CI `[−0.00725, +0.03448]`. The practical comparison therefore shows an efficiency tradeoff, not a quality win.
+
+Before running the next control, the equal-activated-capacity Split configuration is frozen as shared width 256 and private width 960:
+
+$$
+256+4(960)=4(1024)=4096.
+$$
+
+It will be trained for the same 6,500 steps and paired seeds 1337, 2027, and 3407, using the same data order, effective batch size, validation sampler, optimizer, and Top-4 probability routing as the completed comparison. Final balanced validation LM loss is the primary outcome. The preregistered non-inferiority margin is `0.01` LM loss, approximately a 1% perplexity increase; non-inferiority requires the upper endpoint of the paired 95% confidence interval for Split minus Standard to be below `0.01`.
+
 ## Required before a paper submission
 
 ### 1. Complete the all-MoE scaling gate
