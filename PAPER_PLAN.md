@@ -58,7 +58,7 @@ The completed single-seed 10-layer, width-640, 16-expert Top-4 experiment found:
 
 Split used 17.9% fewer stored parameters and 8.4% fewer activated parameters, with `+0.00771` validation loss. Standard was better at all 40 evaluation checkpoints. Split was also 8.5% slower in measured median throughput, showing that activated parameter count is not a substitute for hardware measurement.
 
-This is useful exploratory evidence but has only one seed. Its raw W&B export and figures still need to be committed to the repository.
+This is useful exploratory evidence but has only one seed. Its raw W&B export and figures are committed to the repository.
 
 ## Experiment currently prepared
 
@@ -85,11 +85,11 @@ It will be trained for the same 6,500 steps and paired seeds 1337, 2027, and 340
 
 The equal-active control is complete. Its mean difference from Standard was `+0.00053`, with paired 95% CI `[−0.01815, +0.01921]`. It recovered approximately 96% of practical Split's observed deficit, but the upper confidence endpoint exceeded the preregistered `+0.01` margin, so formal non-inferiority was not established.
 
-## Required before a paper submission
+## Confirmatory work completed for the first preprint
 
 ### 1. Complete the all-MoE scaling gate
 
-Train Standard and Split-25 with seed 1337. Report final and best validation LM loss, domain losses, the complete validation trajectory, throughput, runtime, peak VRAM, router entropy, expert load, and shared/private norm ratios.
+Standard and Split-25 were completed with three paired seeds. Final and best validation LM loss, domain losses, complete validation trajectories, throughput, runtime, peak VRAM, router entropy, expert load, and shared/private norm ratios are reported under `results/paper_scaling`.
 
 Decision rule:
 
@@ -139,9 +139,11 @@ The shared-expert baseline is complete. It beat Standard in all three paired see
 
 ### 4. Evaluate on an independent held-out source
 
-Keep the current balanced four-domain validation, but add at least one recognized held-out text corpus that was not used to construct the training set. Publish the exact dataset revision, split, preprocessing, tokenizer, sample count, and evaluation script.
+The primary Top-1 comparison and strongest matched Top-4 allocation comparison are evaluated on the 5,153-example English LAMBADA test split, which was not used to construct the four-source training mixture. The exact dataset and tokenizer revisions, preprocessing, checksums, raw per-seed results, and evaluation script are published under `results/heldout` and `src/splitmoe`.
 
-This does not require another large training run. Existing checkpoints can be evaluated on the additional corpus.
+This evaluation reuses existing model-only checkpoints and introduces no additional training.
+
+Split-25 improved Top-1 full-token loss in all three paired seeds by mean `−0.06372`, 95% CI `[−0.10240, −0.02504]`. Under Top-4, the full shared expert was numerically better in every seed; the equal-active-Split-minus-shared mean was `+0.01019`, with 95% CI `[−0.00762, +0.02801]`, so the held-out difference was not statistically resolved.
 
 ### 5. Complete the novelty and related-work review
 
@@ -154,7 +156,7 @@ Search primary sources for:
 - expert merging, compression, and redundancy analysis;
 - MoE routing and load-balancing methods.
 
-The final novelty statement must be written only after this review. The likely contribution is the controlled partial-width factorization and its empirical parameter/specialization evidence, not the general existence of shared experts.
+The primary-source audit is complete in `paper/RELATED_WORK.md`. The manuscript limits the contribution to the controlled partial-width factorization and its empirical parameter/specialization evidence, not the general existence of shared experts.
 
 ## Strongly recommended, but not blocking the first preprint
 
@@ -230,14 +232,14 @@ A transparent sub-billion-parameter study with paired seeds, public code, raw me
 - [x] W&B logging
 - [x] Export and commit the completed 16E Top-4 results
 - [x] Complete and export the all-MoE scaling runs
-- [ ] Record peak VRAM and standardized throughput
+- [x] Record peak VRAM and standardized throughput
 - [x] Add equal-active-compute control
 - [x] Add shared-expert baseline
-- [ ] Add independent held-out evaluation
-- [ ] Publish dataset revisions, checksums, and preprocessing manifest
-- [ ] Decide whether model-only checkpoints can be hosted
-- [ ] Complete primary-source related-work review
-- [ ] Add licenses and citation metadata appropriate for a paper release
+- [x] Add independent held-out evaluation
+- [x] Publish dataset revisions, checksums, and preprocessing manifest
+- [x] Decide checkpoint policy: publish exact configs and metrics; do not bundle large model weights in the repository
+- [x] Complete primary-source related-work review
+- [x] Add licenses and citation metadata appropriate for a paper release
 
 ## Resource-conscious stopping point
 

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "dataset": "EleutherAI/lambada_openai",
+  "config": "en",
+  "split": "test",
+  "dataset_revision": "900124bf3b8235c6daf21033af9948b3f07346c4",
+  "tokenizer": "HuggingFaceTB/SmolLM2-135M",
+  "tokenizer_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+  "num_examples": 5153,
+  "num_tokens": 420359,
+  "token_dtype": "uint16",
+  "preprocessing": "Each document is tokenized independently without special tokens. The final whitespace-delimited word, including its leading whitespace, is the target suffix.",
+  "source_text_sha256": "d5cd1104aa85dc29dc240378d9c174cb91f6497ba91e91b42bc03844e07a3811",
+  "tokens_sha256": "174f25797bb7b4933cb74e6fa4d53536c4e23d8884bbeab25a076ae5eb6946be",
+  "dataset_license": "MIT"
+}

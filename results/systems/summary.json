@@ -1,0 +1,56 @@
+{
+  "protocol": {
+    "seed": 1729,
+    "batch_size": 4,
+    "sequence_length": 256,
+    "warmup_iterations": 10,
+    "measured_iterations": 50,
+    "precision": "fp16 autocast",
+    "weights": "Deterministically initialized; forward runtime is architecture-only",
+    "logging": "disabled"
+  },
+  "hardware": {
+    "device": "Tesla T4",
+    "torch_version": "2.8.0+cu128",
+    "cuda_version": "12.8"
+  },
+  "models": {
+    "Top-4 Standard": {
+      "model": "Top-4 Standard",
+      "validation_lm_loss_mean": 3.11376412709554,
+      "total_parameters": 235086336,
+      "activated_parameters": 84091392,
+      "median_tokens_per_second": 19315.236390388396,
+      "median_latency_seconds": 0.05301514199999957,
+      "peak_allocated_bytes": 1518923776
+    },
+    "Top-4 Practical Split": {
+      "model": "Top-4 Practical Split",
+      "validation_lm_loss_mean": 3.1273793379465737,
+      "total_parameters": 187900416,
+      "activated_parameters": 74654208,
+      "median_tokens_per_second": 17363.697160469674,
+      "median_latency_seconds": 0.05897361550000113,
+      "peak_allocated_bytes": 1246826496
+    },
+    "Top-4 Equal-active Split": {
+      "model": "Top-4 Equal-active Split",
+      "validation_lm_loss_mean": 3.114295164744059,
+      "total_parameters": 225649152,
+      "activated_parameters": 84091392,
+      "median_tokens_per_second": 18306.904364060996,
+      "median_latency_seconds": 0.05593518050000057,
+      "peak_allocated_bytes": 1458442240
+    },
+    "Top-4 Shared expert": {
+      "model": "Top-4 Shared expert",
+      "validation_lm_loss_mean": 3.0998345216115317,
+      "total_parameters": 235082240,
+      "activated_parameters": 84087296,
+      "median_tokens_per_second": 19436.931272235342,
+      "median_latency_seconds": 0.05268321349999994,
+      "peak_allocated_bytes": 1522053120
+    }
+  },
+  "caveat": "Deterministically initialized weights isolate architecture runtime but do not reproduce trained routing distributions. Report alongside, not instead of, measured training throughput."
+}

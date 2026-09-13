@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this code or results, please cite this repository and the accompanying preprint."
+title: "SplitMoE: Partial-Width Shared Capacity for Parameter-Efficient Sparse Mixture-of-Experts Language Models"
+type: software
+authors:
+  - family-names: Maurya
+    given-names: Priyanshu
+repository-code: "https://github.com/Priyanshu-5257/SplitMoE"
+license: MIT
+version: 0.1.0
+date-released: 2026-09-14

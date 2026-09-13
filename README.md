@@ -30,9 +30,13 @@ Rather than adding a full shared expert on top of a normal MoE, SplitMoE divides
 
 ## Result in one sentence
 
-**SplitMoE improves the stored-parameter frontier under Top-1, including a three-seed all-MoE result with 16.4% fewer total parameters and lower loss than Standard; under 16-expert Top-4 routing, matching active capacity closes the partial-width Split gap, but a conventional full shared expert achieves the best quality, showing that the best shared/private allocation depends on the routing regime.**
+**SplitMoE improves the stored-parameter frontier under Top-1, including a three-seed all-MoE result with 16.4% fewer total parameters and lower loss than Standard that reproduces on independently sourced LAMBADA text; under 16-expert Top-4 routing, matching active capacity closes the partial-width Split gap, but a conventional full shared expert achieves the best quality, showing that the best shared/private allocation depends on the routing regime.**
 
 This is a positive parameter-efficiency result, not proof that the shared path represents “common knowledge” in a semantic sense. Post-training interventions nevertheless show that both SplitMoE branches matter, correct private-expert routing matters, and the private experts are less redundant than complete Standard experts.
+
+The venue-neutral preprint draft is available as [`paper/main.pdf`](paper/main.pdf), with LaTeX source, bibliography, and a primary-source novelty audit under [`paper/`](paper/). The manuscript deliberately presents SplitMoE as a regime-dependent allocation method rather than claiming that shared experts themselves are new.
+
+![Standard MoE and SplitMoE architecture](results/architecture.png)
 
 ## All-MoE scaling results
 
@@ -74,11 +78,36 @@ Training throughput does not follow activated parameter count exactly. The share
 
 ![Top-4 throughput and VRAM](results/paper_scaling/top4_systems.png)
 
+A separate architecture-only benchmark removes training, validation, checkpointing, and W&B overhead. On one Tesla T4 with FP16, batch 4, context 256, 10 warmups, and 50 measured forwards, Standard, practical Split, equal-active Split, and the shared-expert baseline reached 19.32k, 17.36k, 18.31k, and 19.44k tokens/s. Their peak allocated memory was 1.41, 1.16, 1.36, and 1.42 GiB, respectively. These deterministic randomly initialized models isolate reference-implementation cost; they do not reproduce trained routing distributions.
+
+![Standardized single-T4 forward benchmark](results/systems/standardized_t4.png)
+
 Shared/private activation ratios are depth-dependent. Every shared architecture has a stronger shared path in the first layer; private output dominates most later layers, so the result is not explained by the shared branch replacing private computation everywhere.
 
 ![Top-4 shared/private activation norm ratios](results/paper_scaling/top4_shared_private_ratio.png)
 
 Together, these experiments support a bounded conclusion: reusable always-active capacity is useful, but partial-width factorization is a quality/storage tradeoff rather than a universally superior replacement for conventional shared experts. Under Top-1, Split-25 moves the observed parameter-quality frontier; under Top-4, a full shared expert gives the best quality at matched FFN storage and activation.
+
+## Independent held-out evaluation
+
+We evaluated existing 6,500-step checkpoints on the 5,153-example English test split of [`EleutherAI/lambada_openai`](https://huggingface.co/datasets/EleutherAI/lambada_openai), a source not intentionally included in the four-domain training mixture. All twelve evaluations use the same CPU FP32 path. Documents are tokenized independently without special tokens; documents longer than the model window retain their final 257 tokens, and batching never pads or joins documents. Full-token autoregressive LM loss is the primary metric. Final-word token loss and exact argmax token-sequence match are teacher-forced diagnostics, not free-running LAMBADA accuracy.
+
+| Held-out comparison | Model | Full LM loss ↓ | Target-token loss ↓ | Teacher-forced exact sequence ↑ |
+| --- | --- | ---: | ---: | ---: |
+| 8E Top-1 | Standard | 4.96044 | 6.88188 | 5.08% |
+| 8E Top-1 | Split-25 | **4.89672** | **6.53296** | **6.97%** |
+| 16E Top-4 | Equal-active Split | 4.77157 | 6.20603 | 8.06% |
+| 16E Top-4 | Full shared expert | **4.76137** | **6.16261** | **8.23%** |
+
+For Top-1, Split-25 beats Standard in every seed. Its paired full-loss difference is `−0.06372 [−0.10240, −0.02504]`; target-token loss improves by `−0.34892 [−0.51772, −0.18012]`, and teacher-forced exact token-sequence match improves by `+0.01895 [0.00651, 0.03140]`. This independently reproduces the direction of the in-domain Top-1 result.
+
+![Top-1 paired LAMBADA evaluation](results/heldout/top1_lambada.png)
+
+For Top-4, the full shared expert is numerically better on all three seeds in full-token loss, consistent with the in-domain ordering, but the paired equal-active-Split-minus-shared difference of `+0.01019 [−0.00762, +0.02801]` is not statistically resolved. The target-word diagnostic intervals also cross zero.
+
+![Top-4 paired LAMBADA evaluation](results/heldout/top4_lambada.png)
+
+The exact dataset revision, tokenizer revision, preprocessing description, counts, license, and SHA-256 checksums are committed in [`results/heldout/dataset_manifest.json`](results/heldout/dataset_manifest.json). Because the original training mixture was not deduplicated against LAMBADA, this is evidence on a separately sourced corpus rather than a strict contamination audit.
 
 ## Parameter frontier and width sweep
 
@@ -501,6 +530,30 @@ The committed mechanism summary combines Standard-512 with analogous Standard-64
 
 The earlier single-seed pilot remains under [`results`](results). Its validation slice contained stories only because evaluation consumed the first source-ordered blocks. The five-seed experiment corrected this with a fixed `DomainBalancedSampler`; the pilot should not be used as the headline result.
 
+### Independent evaluation and systems artifacts
+
+Prepare the pinned English LAMBADA test set, evaluate a model-only checkpoint, and rebuild the paired report with:
+
+```bash
+splitmoe-prepare-heldout --output-dir data/heldout/lambada_openai_en
+
+PYTHONPATH=src python scripts/evaluate_heldout.py \
+  --checkpoint checkpoints/example/final.pt \
+  --data data/heldout/lambada_openai_en \
+  --output results/heldout/raw/example.json \
+  --device cpu
+
+python scripts/summarize_heldout_results.py
+```
+
+The committed [`results/heldout/dataset_manifest.json`](results/heldout/dataset_manifest.json) pins the dataset and tokenizer revisions and includes source-text and token-file SHA-256 checksums. Aggregation requires the standardized CPU path and three paired 6,500-step checkpoints for each reported model.
+
+Rebuild the systems table and figure from the committed raw single-T4 records with:
+
+```bash
+python scripts/summarize_systems_results.py
+```
+
 ## Logged diagnostics
 
 W&B records language-model loss, total loss, overall and per-domain validation perplexity, learning rate, gradient norm, throughput, router entropy, expert load, shared/private activation norms, and domain-conditioned routing.
@@ -541,6 +594,7 @@ The smoke test creates a temporary memory-mapped dataset, performs optimizer ste
 - The default router uses a straight-through selected gate: its forward scale is one while task gradients still reach the router.
 - Auxiliary load balancing and router z-loss are included in total loss but not in `lm_loss`.
 - Data are packed within domains, so each block has one unambiguous domain label.
+- The original training-data source revisions were not pinned; the independent LAMBADA evaluation added for the paper pins both dataset and tokenizer revisions and publishes content checksums.
 - No capacity-based token dropping or expert-parallel communication is used.
 - Checkpoints are written atomically and include model, optimizer, scaler, step, and configuration.
 

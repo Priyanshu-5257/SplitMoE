@@ -1,0 +1,53 @@
+{
+  "config": "kaggle_allmoe_16e_top4_standard_seed1337.json",
+  "architecture": "standard",
+  "model": {
+    "vocab_size": 49152,
+    "max_seq_len": 256,
+    "n_layers": 8,
+    "d_model": 512,
+    "n_heads": 8,
+    "dense_ffn_width": 1024,
+    "moe_every": 1,
+    "moe_type": "standard",
+    "n_experts": 16,
+    "top_k": 4,
+    "standard_expert_width": 1024,
+    "shared_width": 512,
+    "private_width": 512,
+    "dropout": 0.0,
+    "router_aux_loss_coef": 0.01,
+    "router_z_loss_coef": 0.001,
+    "router_jitter": 0.0,
+    "router_weight_mode": "probability",
+    "split_output_scale": 0.7071067811865476,
+    "tie_embeddings": true
+  },
+  "parameters": {
+    "total": 235086336,
+    "activated_per_token": 84091392,
+    "routed_experts": 201326592,
+    "shared_ffn": 0,
+    "routers": 65536
+  },
+  "protocol": {
+    "seed": 1729,
+    "batch_size": 4,
+    "sequence_length": 256,
+    "warmup_iterations": 10,
+    "measured_iterations": 50,
+    "precision": "fp16 autocast",
+    "weights": "Deterministically initialized; forward runtime is architecture-only",
+    "logging": "disabled"
+  },
+  "systems": {
+    "median_latency_seconds": 0.05301514199999957,
+    "mean_latency_seconds": 0.05322754211999975,
+    "median_tokens_per_second": 19315.236390388396,
+    "mean_tokens_per_second": 19238.16053146744,
+    "peak_allocated_bytes": 1518923776,
+    "device": "Tesla T4",
+    "torch_version": "2.8.0+cu128",
+    "cuda_version": "12.8"
+  }
+}

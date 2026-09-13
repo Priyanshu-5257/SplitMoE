@@ -1,0 +1,153 @@
+{
+  "checkpoint": "final.pt",
+  "architecture": "standard",
+  "seed": 1337,
+  "checkpoint_step": 6500,
+  "dataset": {
+    "version": 1,
+    "dataset": "EleutherAI/lambada_openai",
+    "config": "en",
+    "split": "test",
+    "dataset_revision": "900124bf3b8235c6daf21033af9948b3f07346c4",
+    "tokenizer": "HuggingFaceTB/SmolLM2-135M",
+    "tokenizer_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+    "num_examples": 5153,
+    "num_tokens": 420359,
+    "token_dtype": "uint16",
+    "preprocessing": "Each document is tokenized independently without special tokens. The final whitespace-delimited word, including its leading whitespace, is the target suffix.",
+    "source_text_sha256": "d5cd1104aa85dc29dc240378d9c174cb91f6497ba91e91b42bc03844e07a3811",
+    "tokens_sha256": "174f25797bb7b4933cb74e6fa4d53536c4e23d8884bbeab25a076ae5eb6946be",
+    "dataset_license": "MIT"
+  },
+  "evaluation": {
+    "max_context_tokens": 256,
+    "long_document_policy": "Keep the final max_seq_len+1 tokens",
+    "full_lm_loss": 4.950063449582175,
+    "full_perplexity": 141.18392169813185,
+    "last_word_token_loss": 6.875065366619176,
+    "last_word_perplexity": 967.8386278560447,
+    "last_word_exact_match": 0.05162041529206288,
+    "examples": 5153,
+    "scored_tokens": 415206,
+    "target_tokens": 7034,
+    "elapsed_seconds": 268.7588655190193,
+    "tokens_per_second": 1544.9015949601,
+    "device": "cpu",
+    "batching": "Documents grouped by identical token length; no padding or cross-document context",
+    "precision": "fp32"
+  },
+  "routing": [
+    {
+      "layer": 1,
+      "entropy": 1.9922477284187539,
+      "expert_fraction": [
+        0.08336584731434517,
+        0.07395124347914048,
+        0.18729738972943552,
+        0.2791313227650853,
+        0.048375986859534786,
+        0.13607703164212462,
+        0.09538397807353459,
+        0.09641720013679957
+      ]
+    },
+    {
+      "layer": 2,
+      "entropy": 2.0083822192903686,
+      "expert_fraction": [
+        0.0370827974547574,
+        0.0632408972895382,
+        0.07494352201076092,
+        0.12227183614880324,
+        0.19761515970385785,
+        0.28929976927115697,
+        0.10726001069348709,
+        0.10828600742763833
+      ]
+    },
+    {
+      "layer": 3,
+      "entropy": 1.842755468128397,
+      "expert_fraction": [
+        0.075555266542391,
+        0.15719666864158996,
+        0.09479872641532155,
+        0.08046849033973498,
+        0.1353520902877126,
+        0.04789670669498996,
+        0.2783943391954837,
+        0.13033771188277626
+      ]
+    },
+    {
+      "layer": 4,
+      "entropy": 1.6118582944309834,
+      "expert_fraction": [
+        0.1397258228445639,
+        0.11542944947809039,
+        0.12559789598416207,
+        0.05852998270737899,
+        0.23712085085475643,
+        0.11403014407306253,
+        0.09548994956720279,
+        0.11407590449078289
+      ]
+    },
+    {
+      "layer": 5,
+      "entropy": 1.7089475836634316,
+      "expert_fraction": [
+        0.11137844828831954,
+        0.12566774083226157,
+        0.11140253271869867,
+        0.04194303550526726,
+        0.22997018347519063,
+        0.20273310115942447,
+        0.13958854159140283,
+        0.03731641642943503
+      ]
+    },
+    {
+      "layer": 6,
+      "entropy": 1.266839848847706,
+      "expert_fraction": [
+        0.03142777320173601,
+        0.2506081318670732,
+        0.0338506668978772,
+        0.10193012625058405,
+        0.15531808307201728,
+        0.1102681560478413,
+        0.19283680871663705,
+        0.12376025394623391
+      ]
+    },
+    {
+      "layer": 7,
+      "entropy": 1.3055445544381585,
+      "expert_fraction": [
+        0.11370259581990626,
+        0.06001117517569592,
+        0.15957380192001078,
+        0.15250743004677197,
+        0.10060548257973151,
+        0.20040654518479983,
+        0.09268893031410914,
+        0.12050403895897459
+      ]
+    },
+    {
+      "layer": 8,
+      "entropy": 1.353574880413116,
+      "expert_fraction": [
+        0.1572352037301966,
+        0.2161192275641489,
+        0.11108943512376988,
+        0.0614658747705958,
+        0.11032595868075123,
+        0.11476953608570203,
+        0.06802888204891067,
+        0.1609658819959249
+      ]
+    }
+  ]
+}
