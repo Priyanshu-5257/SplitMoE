@@ -83,6 +83,8 @@ $$
 
 It will be trained for the same 6,500 steps and paired seeds 1337, 2027, and 3407, using the same data order, effective batch size, validation sampler, optimizer, and Top-4 probability routing as the completed comparison. Final balanced validation LM loss is the primary outcome. The preregistered non-inferiority margin is `0.01` LM loss, approximately a 1% perplexity increase; non-inferiority requires the upper endpoint of the paired 95% confidence interval for Split minus Standard to be below `0.01`.
 
+The equal-active control is complete. Its mean difference from Standard was `+0.00053`, with paired 95% CI `[−0.01815, +0.01921]`. It recovered approximately 96% of practical Split's observed deficit, but the upper confidence endpoint exceeded the preregistered `+0.01` margin, so formal non-inferiority was not established.
+
 ## Required before a paper submission
 
 ### 1. Complete the all-MoE scaling gate
@@ -132,6 +134,8 @@ $$
 $$
 
 The router has 15 rather than 16 outputs, leaving the full model 4,096 parameters smaller than Standard; this negligible difference will be disclosed rather than hidden. The baseline uses the same three paired seeds, 6,500 steps, data order, effective batch, optimizer, probability routing, and branch-output scale as the corresponding experiments. This baseline distinguishes the contribution of explicitly dividing active capacity from merely making one full expert always active.
+
+The shared-expert baseline is complete. It beat Standard in all three paired seeds by mean `−0.01393`, with 95% CI `[−0.02463, −0.00323]`, and had the better mean at all 26 validation checkpoints. It is the strongest tested Top-4 model. This rules out claiming universal superiority for partial-width SplitMoE and narrows the contribution to the measured quality/storage frontier and Top-1 specialization evidence.
 
 ### 4. Evaluate on an independent held-out source
 
@@ -224,11 +228,11 @@ A transparent sub-billion-parameter study with paired seeds, public code, raw me
 - [x] Five-seed raw metrics and plots
 - [x] Causal and similarity analysis code
 - [x] W&B logging
-- [ ] Export and commit the completed 16E Top-4 results
-- [ ] Complete and export the all-MoE scaling runs
+- [x] Export and commit the completed 16E Top-4 results
+- [x] Complete and export the all-MoE scaling runs
 - [ ] Record peak VRAM and standardized throughput
-- [ ] Add equal-active-compute control
-- [ ] Add shared-expert baseline
+- [x] Add equal-active-compute control
+- [x] Add shared-expert baseline
 - [ ] Add independent held-out evaluation
 - [ ] Publish dataset revisions, checksums, and preprocessing manifest
 - [ ] Decide whether model-only checkpoints can be hosted

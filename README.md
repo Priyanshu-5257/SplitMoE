@@ -30,9 +30,55 @@ Rather than adding a full shared expert on top of a normal MoE, SplitMoE divides
 
 ## Result in one sentence
 
-**Across five paired seeds, Split-25 reduced stored MoE-FFN parameters by 18.75% at matched activated capacity, with no detected validation-loss degradation relative to Standard-1024. At exactly matched total parameter count, Split-50 beat Standard-640 in all five seeds. Finally, same-width analysis shows that Split-50's private experts are significantly less redundant than conventional width-512 experts.**
+**SplitMoE improves the stored-parameter frontier under Top-1, including a three-seed all-MoE result with 16.4% fewer total parameters and lower loss than Standard; under 16-expert Top-4 routing, matching active capacity closes the partial-width Split gap, but a conventional full shared expert achieves the best quality, showing that the best shared/private allocation depends on the routing regime.**
 
 This is a positive parameter-efficiency result, not proof that the shared path represents “common knowledge” in a semantic sense. Post-training interventions nevertheless show that both SplitMoE branches matter, correct private-expert routing matters, and the private experts are less redundant than complete Standard experts.
+
+## All-MoE scaling results
+
+We replaced every FFN in an 8-layer, width-512 decoder with an MoE and trained three paired seeds for 6,500 optimizer steps. The first experiment used eight experts and Top-1 routing. Split-25 allocated width 256 to the shared path and 768 to each private expert, exactly matching Standard's active FFN width while reducing total stored parameters by 16.4%.
+
+| 8E Top-1 model | Total params | Activated params/token | Validation LM loss | Paired Split − Standard |
+| --- | ---: | ---: | ---: | ---: |
+| Standard | 134.39M | 46.31M | 3.34034 | — |
+| Split-25 | **112.37M** | 46.31M | **3.25393** | **−0.08640 [−0.09483, −0.07798]** |
+
+Split won all three paired seeds and all four validation domains. This result is positive at this scale, but it should not be compared numerically with the earlier 10,000-step experiments because the architecture, number of MoE layers, training horizon, and routing setup differ.
+
+![Paired 8-expert Top-1 all-MoE results](results/paper_scaling/top1_paired_loss.png)
+
+We then increased the routing problem to 16 experts with four active routes. Four variants separate storage, active capacity, and shared-expert allocation:
+
+| 16E Top-4 model | FFN allocation per layer | Total params | Activated params/token | Validation LM loss |
+| --- | --- | ---: | ---: | ---: |
+| Standard | 16 private × 1024; Top-4 | 235.09M | 84.09M | 3.11376 |
+| Practical Split | shared 256 + 16 private × 768; Top-4 | **187.90M** | **74.65M** | 3.12738 |
+| Equal-active Split | shared 256 + 16 private × 960; Top-4 | 225.65M | 84.09M | 3.11430 |
+| Shared expert | shared 1024 + 15 private × 1024; Top-3 | 235.08M | 84.09M | **3.09983** |
+
+![Paired 16-expert Top-4 results](results/paper_scaling/top4_paired_loss.png)
+
+The practical Split configuration reduces total storage by 20.1% and activated parameters by 11.2%, with an observed `+0.01362` loss difference from Standard and paired 95% CI `[−0.00725, +0.03448]`. After active capacity is matched, the difference contracts to `+0.00053 [−0.01815, +0.01921]`: nearly identical observed means, but the preregistered non-inferiority requirement that the upper endpoint be below `+0.01` is not met.
+
+The conventional shared-expert baseline is strongest under Top-4. It beats Standard in all three seeds by `−0.01393 [−0.02463, −0.00323]` and has the better mean at all 26 validation checkpoints. It also beats practical Split by `−0.02754 [−0.03920, −0.01589]`. Its `−0.01446 [−0.03194, +0.00301]` numerical advantage over equal-active Split is not statistically resolved with three seeds.
+
+![Top-4 validation convergence](results/paper_scaling/top4_convergence.png)
+
+![Top-4 quality versus stored parameters](results/paper_scaling/top4_parameter_frontier.png)
+
+The domain results tell the same broad story: the full shared expert has the lowest mean loss in every domain, while equal-active Split is close to Standard and is numerically better on code and mathematics.
+
+![Top-4 domain validation](results/paper_scaling/top4_domain_loss.png)
+
+Training throughput does not follow activated parameter count exactly. The shared-expert baseline is marginally faster than Standard, while both partial-width Split variants are slower because they launch a separate shared FFN in addition to routed FFNs. Practical Split nevertheless lowers peak reserved VRAM from 6.38 GiB to 5.32 GiB per GPU.
+
+![Top-4 throughput and VRAM](results/paper_scaling/top4_systems.png)
+
+Shared/private activation ratios are depth-dependent. Every shared architecture has a stronger shared path in the first layer; private output dominates most later layers, so the result is not explained by the shared branch replacing private computation everywhere.
+
+![Top-4 shared/private activation norm ratios](results/paper_scaling/top4_shared_private_ratio.png)
+
+Together, these experiments support a bounded conclusion: reusable always-active capacity is useful, but partial-width factorization is a quality/storage tradeoff rather than a universally superior replacement for conventional shared experts. Under Top-1, Split-25 moves the observed parameter-quality frontier; under Top-4, a full shared expert gives the best quality at matched FFN storage and activation.
 
 ## Parameter frontier and width sweep
 
@@ -421,6 +467,12 @@ The raw per-seed metrics, validation histories, norm histories, aggregate statis
 ```bash
 pip install -e '.[analysis]'
 python scripts/export_seed_results.py
+```
+
+The three-seed all-MoE Top-1 and Top-4 tables, complete validation histories, router summaries, statistical comparisons, and plots are committed under [`results/paper_scaling`](results/paper_scaling). Regenerate the report from the four public W&B projects with:
+
+```bash
+python scripts/export_paper_scaling_results.py
 ```
 
 The parameter-frontier tables, per-seed metrics, and plots are committed under [`results/frontier`](results/frontier). Regenerate them from all three public W&B projects with:
