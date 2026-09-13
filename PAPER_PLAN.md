@@ -121,7 +121,17 @@ This control can be run at the cheaper 10-layer scale if the all-MoE version is 
 
 The broad idea of always-active shared experts has precedent. Compare SplitMoE against a conventional shared-expert-plus-routed-experts design under a clearly specified matching rule. At least one comparison should match activated FFN width; ideally another should match total stored parameters.
 
-The exact widths and primary comparison must be frozen before training. This baseline distinguishes the contribution of explicitly dividing active capacity from merely adding an always-on expert.
+The exact primary baseline is frozen before training as one always-active width-1024 expert plus 15 width-1024 routed experts, with Top-3 routing. It therefore stores 16 full-width FFNs per layer and activates four full-width FFNs per token, matching Standard-16E Top-4 at the FFN level:
+
+$$
+1(1024)+15(1024)=16(1024),
+$$
+
+$$
+1(1024)+3(1024)=4(1024).
+$$
+
+The router has 15 rather than 16 outputs, leaving the full model 4,096 parameters smaller than Standard; this negligible difference will be disclosed rather than hidden. The baseline uses the same three paired seeds, 6,500 steps, data order, effective batch, optimizer, probability routing, and branch-output scale as the corresponding experiments. This baseline distinguishes the contribution of explicitly dividing active capacity from merely making one full expert always active.
 
 ### 4. Evaluate on an independent held-out source
 

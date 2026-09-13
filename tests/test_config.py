@@ -175,6 +175,40 @@ def test_kaggle_equal_active_top4_split_configs_match_standard_activation():
     assert equal_active["activated_per_token"] == standard_summary["activated_per_token"] == 84_091_392
 
 
+def test_kaggle_shared_expert_baseline_matches_standard_ffn_capacity():
+    root = Path(__file__).parents[1]
+    seeds = [1337, 2027, 3407]
+    configs = [
+        ExperimentConfig.from_json(
+            root / "configs" / f"kaggle_allmoe_shared1_routed15_top3_seed{seed}.json"
+        )
+        for seed in seeds
+    ]
+    for config, seed in zip(configs, seeds, strict=True):
+        assert config.model.moe_type == "split"
+        assert config.model.n_layers == 8
+        assert config.model.moe_every == 1
+        assert config.model.n_experts == 15
+        assert config.model.top_k == 3
+        assert config.model.shared_width == 1024
+        assert config.model.private_width == 1024
+        assert config.model.router_weight_mode == "probability"
+        assert config.train.seeds == [seed]
+        assert config.train.micro_batch_size * config.train.gradient_accumulation_steps * 2 == 64
+        assert config.train.max_steps == 6500
+        assert config.train.wandb_project == "splitmoe-paper-allmoe-shared-expert-baseline"
+
+    baseline = DecoderLM(configs[0].model).parameter_summary()
+    standard = ExperimentConfig.from_json(
+        root / "configs" / "kaggle_allmoe_16e_top4_standard_seed1337.json"
+    )
+    standard_summary = DecoderLM(standard.model).parameter_summary()
+    assert baseline["total"] == standard_summary["total"] - 4_096 == 235_082_240
+    assert baseline["activated_per_token"] == (
+        standard_summary["activated_per_token"] - 4_096
+    ) == 84_087_296
+
+
 def test_top_k_cannot_exceed_expert_count():
     with pytest.raises(ValueError, match="top_k"):
         ModelConfig(n_experts=4, top_k=5).validate()
