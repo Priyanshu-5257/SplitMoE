@@ -585,6 +585,25 @@ python scripts/smoke_test.py --multi-seed
 python scripts/smoke_test.py --top-k 4
 ```
 
+### Reviewer-control runs
+
+The predeclared output-scaling control completes a 2-by-2 comparison of Standard-1024 and Split-25 at output scales $1$ and $1/\sqrt{2}$. It also adds a width-800 Standard baseline with exactly the same total parameter count as Split-25. The full hypotheses and statistical protocol are frozen in [`PAPER_PLAN.md`](PAPER_PLAN.md#reviewer-control-experiment-output-scaling-and-matched-storage).
+
+Each seed can be launched independently on 2-GPU Kaggle with the same command shape:
+
+```bash
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train \
+  --config configs/review_split25_scale1.json --seed 1337
+
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train \
+  --config configs/review_standard1024_scale07071.json --seed 1337
+
+torchrun --standalone --nproc_per_node=2 -m splitmoe.train \
+  --config configs/review_standard800_scale1.json --seed 1337
+```
+
+Replace `1337` with `2027` or `3407` for the other paired seeds. W&B uses the projects `splitmoe-paper-review-scale` and `splitmoe-paper-review-storage`, with the seed appended to every run name.
+
 The smoke test creates a temporary memory-mapped dataset, performs optimizer steps, evaluates, and saves a checkpoint.
 
 ## Reproducibility notes

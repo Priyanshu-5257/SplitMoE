@@ -516,6 +516,16 @@ def load_experiment_configs(path: str | Path) -> list[ExperimentConfig]:
     return configs
 
 
+def apply_seed_override(config: ExperimentConfig, seed: int) -> None:
+    """Turn a multi-seed base config into one independently launchable run."""
+    original_output = Path(config.train.output_dir)
+    original_name = config.train.wandb_run_name or config.model.moe_type
+    config.train.seed = int(seed)
+    config.train.seeds = [int(seed)]
+    config.train.output_dir = str(original_output / f"seed-{seed}")
+    config.train.wandb_run_name = f"{original_name}-seed-{seed}"
+
+
 def run_seed_suite(base_config, distributed, rank, local_rank, world_size, device, train_data, validation_data):
     seeds = base_config.train.seeds
     if not seeds or len(set(seeds)) != len(seeds):
@@ -547,9 +557,13 @@ def run_seed_suite(base_config, distributed, rank, local_rank, world_size, devic
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train one experiment or a sequential experiment suite")
     parser.add_argument("--config", required=True)
+    parser.add_argument("--seed", type=int, help="Run only this seed with seed-specific names and output")
     parser.add_argument("--smoke-steps", type=int, default=None, help="Override max steps for a quick validation")
     args = parser.parse_args()
     experiment_configs = load_experiment_configs(args.config)
+    if args.seed is not None:
+        for config in experiment_configs:
+            apply_seed_override(config, args.seed)
     for config in experiment_configs:
         if args.smoke_steps is not None:
             config.train.max_steps = args.smoke_steps

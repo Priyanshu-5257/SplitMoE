@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from splitmoe.config import ModelConfig
-from splitmoe.model import DecoderLM, SplitMoE, TopKRouter
+from splitmoe.model import DecoderLM, SplitMoE, StandardMoE, TopKRouter
 
 
 @pytest.mark.parametrize("moe_type", ["dense", "standard", "split"])
@@ -40,6 +40,22 @@ def test_straight_through_has_unit_forward_scale():
     cfg = ModelConfig(d_model=16, n_heads=2, n_layers=1, n_experts=2, private_width=8)
     module = SplitMoE(cfg)
     assert module.routed.weight_mode == "straight_through"
+
+
+def test_standard_output_scale_only_rescales_forward_output():
+    common = dict(
+        d_model=16, n_heads=2, n_layers=1, n_experts=2,
+        standard_expert_width=8, router_jitter=0.0,
+    )
+    unscaled = StandardMoE(ModelConfig(**common, standard_output_scale=1.0))
+    scaled = StandardMoE(ModelConfig(**common, standard_output_scale=0.5))
+    scaled.load_state_dict(unscaled.state_dict())
+    inputs = torch.randn(2, 5, 16)
+
+    reference, _ = unscaled(inputs)
+    actual, _ = scaled(inputs)
+
+    assert torch.allclose(actual, reference * 0.5)
 
 
 def test_split_dispatch_under_autocast():

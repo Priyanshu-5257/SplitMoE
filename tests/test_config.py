@@ -4,7 +4,7 @@ import pytest
 
 from splitmoe.config import ExperimentConfig, ModelConfig
 from splitmoe.model import DecoderLM
-from splitmoe.train import load_experiment_configs
+from splitmoe.train import apply_seed_override, load_experiment_configs
 
 
 def test_experiment_configs_use_preregistered_seed_suite():
@@ -116,6 +116,45 @@ def test_paper_allmoe_configs_define_clean_controls():
     all_variants = load_experiment_configs(root / "configs" / "paper_allmoe_all.json")
     assert len(primary) == 2
     assert len(all_variants) == 3
+
+
+def test_review_configs_form_scale_factorial_and_equal_storage_control():
+    root = Path(__file__).parents[1]
+    split = ExperimentConfig.from_json(root / "configs" / "review_split25_scale1.json")
+    scaled_standard = ExperimentConfig.from_json(
+        root / "configs" / "review_standard1024_scale07071.json"
+    )
+    storage_standard = ExperimentConfig.from_json(
+        root / "configs" / "review_standard800_scale1.json"
+    )
+    existing_split = ExperimentConfig.from_json(root / "configs" / "paper_allmoe_split25.json")
+
+    assert split.model.split_output_scale == 1.0
+    assert scaled_standard.model.standard_output_scale == pytest.approx(2**-0.5)
+    assert storage_standard.model.standard_output_scale == 1.0
+    assert all(config.train.seeds == [1337, 2027, 3407] for config in (
+        split, scaled_standard, storage_standard,
+    ))
+    assert split.train.wandb_project == scaled_standard.train.wandb_project
+    assert storage_standard.train.wandb_project == "splitmoe-paper-review-storage"
+
+    split_summary = DecoderLM(split.model).parameter_summary()
+    existing_summary = DecoderLM(existing_split.model).parameter_summary()
+    storage_summary = DecoderLM(storage_standard.model).parameter_summary()
+    assert split_summary == existing_summary
+    assert split_summary["total"] == storage_summary["total"] == 112_370_176
+
+
+def test_seed_override_produces_isolated_run_identity():
+    root = Path(__file__).parents[1]
+    config = ExperimentConfig.from_json(root / "configs" / "review_split25_scale1.json")
+
+    apply_seed_override(config, 2027)
+
+    assert config.train.seed == 2027
+    assert config.train.seeds == [2027]
+    assert config.train.output_dir.endswith("review-split25-scale1/seed-2027")
+    assert config.train.wandb_run_name == "review-split25-scale1-seed-2027"
 
 
 def test_kaggle_allmoe_16e_top4_configs_are_paired_and_isolated():

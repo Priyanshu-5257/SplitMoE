@@ -130,10 +130,11 @@ class StandardMoE(nn.Module):
         self.routed = RoutedExperts(
             cfg.d_model, cfg.standard_expert_width, cfg.n_experts, cfg.dropout, cfg.router_weight_mode
         )
+        self.output_scale = cfg.standard_output_scale
 
     def forward(self, x: torch.Tensor, collect_assignments: bool = False):
         indices, selected, stats = self.router(x, collect_assignments)
-        return self.routed(x, indices, selected), stats
+        return self.routed(x, indices, selected) * self.output_scale, stats
 
 
 class SplitMoE(nn.Module):

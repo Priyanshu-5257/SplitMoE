@@ -26,6 +26,7 @@ class ModelConfig:
     router_z_loss_coef: float = 0.001
     router_jitter: float = 0.0
     router_weight_mode: str = "straight_through"  # probability, straight_through, none
+    standard_output_scale: float = 1.0
     split_output_scale: float = 0.7071067811865476
     tie_embeddings: bool = True
 
@@ -40,6 +41,8 @@ class ModelConfig:
             raise ValueError("Model dimensions must be positive")
         if not 1 <= self.top_k <= self.n_experts:
             raise ValueError("top_k must be between 1 and n_experts")
+        if self.standard_output_scale <= 0 or self.split_output_scale <= 0:
+            raise ValueError("MoE output scales must be positive")
 
 
 @dataclass

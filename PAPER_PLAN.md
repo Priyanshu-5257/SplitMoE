@@ -167,6 +167,35 @@ The primary-source audit is complete in `paper/RELATED_WORK.md`. The manuscript 
 - Release model-only checkpoints when storage permits; optimizer states are not necessary for evaluation releases.
 - Test one additional expert count only if the all-MoE result suggests a clear scaling trend.
 
+## Reviewer-control experiment: output scaling and matched storage
+
+This experiment was frozen before training in response to the main reviewer concern. It uses the existing 8-layer, width-512, all-MoE, 8-expert Top-1 setting; 6,500 optimizer steps; seeds 1337, 2027, and 3407; and the identical tokenizer, pretokenized data, effective batch, optimizer, validation sampler, and routing implementation used by the completed scaling comparison.
+
+The primary 2-by-2 control varies architecture and FFN output scale while holding the Standard and Split active FFN width at 1,024:
+
+| Architecture | Output scale $1$ | Output scale $1/\sqrt{2}$ |
+| --- | --- | --- |
+| Standard-1024 | Existing checkpoints | `review_standard1024_scale07071.json` |
+| Split-25 (256 shared + 768 private) | `review_split25_scale1.json` | Existing checkpoints |
+
+The primary outcome is final domain-balanced validation LM loss at step 6,500. Analyses use paired seed differences and two-sided 95% Student-$t$ confidence intervals over the three seeds. The predeclared comparisons are:
+
+1. Split versus Standard at output scale 1;
+2. Split versus Standard at output scale $1/\sqrt{2}$;
+3. the within-architecture output-scale effect;
+4. the architecture-by-scale interaction (difference of the two architecture contrasts).
+
+No confidence interval crossing zero will be described as equivalence. This factorial control separates the effect of sharing from the effect of scaling the residual FFN output. A two-private-branch control is unnecessary because two parallel partial-width SwiGLU branches routed together are algebraically equivalent to one wider conventional expert under the implementation used here.
+
+An additional equal-storage baseline, `review_standard800_scale1.json`, compares width-800 Standard MoE with Split-25 at output scale 1. Both contain exactly 112,370,176 total parameters. Split activates more parameters per token, so this is explicitly a storage/quality comparison rather than an equal-compute comparison.
+
+All nine new runs use separate W&B namespaces:
+
+- project `splitmoe-paper-review-scale` for the six factorial-control runs;
+- project `splitmoe-paper-review-storage` for the three equal-storage runs.
+
+The training configs support `--seed` so each Kaggle kernel has an independent seed-specific run name and checkpoint directory without changing the notebook launch arguments otherwise.
+
 ## Not necessary for an individual-researcher paper
 
 - Training a frontier-scale or multi-billion-parameter model.
