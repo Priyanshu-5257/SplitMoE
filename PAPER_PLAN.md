@@ -236,7 +236,7 @@ A transparent sub-billion-parameter study with paired seeds, public code, raw me
 
 ### Main paper
 
-1. Architecture diagram: Standard MoE versus DeepSeekMoE-style full shared-expert isolation versus partial-width SplitMoE.
+1. Architecture diagram: Standard MoE versus DeepSeekMoE fine-grained/shared-expert isolation versus partial-width SplitMoE.
 2. Quality versus stored-parameter Pareto frontier.
 3. Quality versus activated parameters and measured throughput.
 4. Scaling plot showing model size against paired Split-minus-Standard loss.

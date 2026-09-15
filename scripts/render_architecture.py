@@ -1,28 +1,28 @@
-"""Render the Standard, full-shared-expert, and SplitMoE comparison."""
+"""Render an expert-bank comparison of Standard MoE, DeepSeekMoE, and SplitMoE."""
 
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Patch
+from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch, Patch
 
 
-INK = "#253047"
-NEUTRAL = "#EEF2FF"
-ROUTED = "#FDE9D8"
-SHARED = "#DDF3E5"
-MERGE = "#FFF4CC"
+INK = "#1F2937"
+ROUTED = "#DCEAF7"
+SHARED = "#CDE7BE"
+SELECTED = "#F59E0B"
+NEUTRAL = "#F8FAFC"
 
 
-def box(axis, x, y, width, height, label, color=NEUTRAL, fontsize=9.4):
+def box(axis, x, y, width, height, label, color=ROUTED, fontsize=8.5, edge=INK, linewidth=1.1):
     patch = FancyBboxPatch(
         (x, y),
         width,
         height,
-        boxstyle="round,pad=0.025",
+        boxstyle="round,pad=0.012",
         facecolor=color,
-        edgecolor=INK,
-        linewidth=1.25,
+        edgecolor=edge,
+        linewidth=linewidth,
     )
     axis.add_patch(patch)
     axis.text(
@@ -32,107 +32,173 @@ def box(axis, x, y, width, height, label, color=NEUTRAL, fontsize=9.4):
         ha="center",
         va="center",
         fontsize=fontsize,
-        linespacing=1.05,
+        linespacing=1.0,
     )
+    return patch
 
 
-def arrow(axis, start, end):
+def arrow(axis, start, end, color=INK, linewidth=1.0, connectionstyle="arc3"):
     axis.add_patch(
         FancyArrowPatch(
             start,
             end,
             arrowstyle="-|>",
-            mutation_scale=11,
-            linewidth=1.25,
-            color=INK,
-            shrinkA=0,
-            shrinkB=0,
+            mutation_scale=9,
+            linewidth=linewidth,
+            color=color,
+            connectionstyle=connectionstyle,
+            shrinkA=1,
+            shrinkB=1,
         )
     )
 
 
-def row_title(axis, y, title, detail, detail_x):
-    title_y = y + 1.24
-    axis.text(0.05, title_y, title, fontsize=11.5, fontweight="bold", va="center")
-    axis.text(detail_x, title_y, detail, fontsize=8.7, color="#536078", va="center")
+def selected_outline(axis, x, y, width, height):
+    axis.add_patch(
+        FancyBboxPatch(
+            (x - 0.012, y - 0.018),
+            width + 0.024,
+            height + 0.036,
+            boxstyle="round,pad=0.012",
+            fill=False,
+            edgecolor=SELECTED,
+            linewidth=1.6,
+            linestyle=(0, (3, 2)),
+        )
+    )
 
 
-def input_and_output(axis, y):
-    box(axis, 0.25, y, 0.85, 0.58, "$x$")
-    box(axis, 9.62, y, 0.98, 0.58, "$F(x)$")
+def base_panel(axis, title, subtitle):
+    axis.set_xlim(0, 1)
+    axis.set_ylim(0, 1)
+    axis.axis("off")
+    axis.text(0.5, 0.055, title, ha="center", va="center", fontsize=10.5, fontweight="bold")
+    axis.text(0.5, 0.012, subtitle, ha="center", va="center", fontsize=7.8, color="#526079")
+    box(axis, 0.39, 0.11, 0.22, 0.075, "Input hidden $x$", NEUTRAL, fontsize=8.0)
+    box(axis, 0.405, 0.255, 0.19, 0.075, "Router", "#FFF1C9", fontsize=8.0)
+    box(axis, 0.38, 0.855, 0.24, 0.075, "Output hidden $F(x)$", NEUTRAL, fontsize=8.0)
+    merge = Circle((0.5, 0.775), 0.024, facecolor="white", edgecolor=INK, linewidth=1.1)
+    axis.add_patch(merge)
+    axis.text(0.5, 0.775, "$\\oplus$", ha="center", va="center", fontsize=10)
+    arrow(axis, (0.5, 0.185), (0.5, 0.255))
+    arrow(axis, (0.5, 0.799), (0.5, 0.855))
 
 
-fig, axis = plt.subplots(figsize=(11.2, 6.4))
-axis.set_xlim(0, 10.9)
-axis.set_ylim(-0.45, 6.65)
-axis.axis("off")
+def connect_selected(axis, center_x, expert_bottom, expert_top, curve):
+    arrow(
+        axis,
+        (0.5, 0.33),
+        (center_x, expert_bottom),
+        color="#475569",
+        connectionstyle=f"arc3,rad={curve}",
+    )
+    arrow(
+        axis,
+        (center_x, expert_top),
+        (0.5, 0.751),
+        connectionstyle=f"arc3,rad={-curve / 2}",
+    )
 
-# Standard sparse MoE.
-y = 5.12
-row_title(axis, y, "Standard MoE", "complete routed experts; no always-active expert", 1.78)
-input_and_output(axis, y)
-box(axis, 1.85, y, 1.25, 0.58, "Router")
-box(axis, 4.02, y - 0.12, 2.22, 0.82, "$K$ selected\nfull experts", ROUTED)
-box(axis, 7.32, y, 1.22, 0.58, "Weighted\nsum", MERGE, fontsize=8.8)
-arrow(axis, (1.10, y + 0.29), (1.85, y + 0.29))
-arrow(axis, (3.10, y + 0.29), (4.02, y + 0.29))
-arrow(axis, (6.24, y + 0.29), (7.32, y + 0.29))
-arrow(axis, (8.54, y + 0.29), (9.62, y + 0.29))
 
-# Established full shared-expert pattern.
-y = 3.10
-row_title(
+fig, axes = plt.subplots(1, 3, figsize=(14.2, 5.3))
+fig.subplots_adjust(left=0.025, right=0.985, top=0.91, bottom=0.19, wspace=0.10)
+
+# (a) Conventional MoE: N complete experts, K selected.
+axis = axes[0]
+base_panel(axis, "(a) Standard MoE", "$N$ complete experts; activate $K$")
+expert_y, expert_h, expert_w = 0.47, 0.105, 0.17
+xs = [0.08, 0.29, 0.50, 0.71]
+labels = ["$E_1$", "$E_2$", "$\\cdots$", "$E_N$"]
+for x, label in zip(xs, labels, strict=True):
+    box(axis, x, expert_y, expert_w, expert_h, label, fontsize=9.0)
+axis.text(0.5, 0.61, "full width $D$ each", ha="center", fontsize=8.0, color="#526079")
+for index, curve in ((0, 0.18), (3, -0.18)):
+    selected_outline(axis, xs[index], expert_y, expert_w, expert_h)
+    connect_selected(axis, xs[index] + expert_w / 2, expert_y, expert_y + expert_h, curve)
+axis.text(0.5, 0.695, "router-weighted sum", ha="center", fontsize=7.7, color="#526079")
+
+# (b) DeepSeekMoE: fine-grained segmentation plus isolated shared experts.
+axis = axes[1]
+base_panel(
     axis,
-    y,
-    "Full shared-expert MoE",
-    "our matched baseline, inspired by DeepSeekMoE shared-expert isolation",
-    2.58,
+    "(b) DeepSeekMoE",
+    "fine-grained segmentation + shared-expert isolation",
 )
-input_and_output(axis, y)
-box(axis, 1.75, y + 0.48, 1.72, 0.58, "Full shared FFN", SHARED)
-box(axis, 1.85, y - 0.38, 1.25, 0.58, "Router")
-box(axis, 4.02, y - 0.49, 2.22, 0.80, "$K$ selected\nfull-width routed experts", ROUTED, fontsize=8.8)
-box(axis, 7.23, y, 1.40, 0.58, "Add shared\n+ routed", MERGE, fontsize=8.8)
-arrow(axis, (1.10, y + 0.29), (1.75, y + 0.77))
-arrow(axis, (1.10, y + 0.29), (1.85, y - 0.09))
-arrow(axis, (3.10, y - 0.09), (4.02, y - 0.09))
-arrow(axis, (3.47, y + 0.77), (7.23, y + 0.42))
-arrow(axis, (6.24, y - 0.09), (7.23, y + 0.15))
-arrow(axis, (8.63, y + 0.29), (9.62, y + 0.29))
+small_y, small_h, small_w = 0.47, 0.105, 0.115
+xs = [0.025, 0.165, 0.305, 0.445, 0.585, 0.725, 0.865]
+labels = ["$S_1$", "$R_1$", "$R_2$", "$R_3$", "$\\cdots$", "$R_{mN-1}$", "$R_{mN}$"]
+for index, (x, label) in enumerate(zip(xs, labels, strict=True)):
+    color = SHARED if index == 0 else ROUTED
+    box(axis, x, small_y, small_w, small_h, label, color, fontsize=7.7)
+axis.text(0.5, 0.61, "fine-grained width $D/m$ each", ha="center", fontsize=8.0, color="#526079")
+selected_outline(axis, xs[0], small_y, small_w, small_h)
+arrow(axis, (0.5, 0.185), (xs[0] + small_w / 2, small_y), connectionstyle="arc3,rad=-0.28")
+arrow(axis, (xs[0] + small_w / 2, small_y + small_h), (0.5, 0.751), connectionstyle="arc3,rad=0.20")
+for index, curve in ((2, 0.11), (5, 0.0), (6, -0.11)):
+    selected_outline(axis, xs[index], small_y, small_w, small_h)
+    connect_selected(axis, xs[index] + small_w / 2, small_y, small_y + small_h, curve)
+axis.text(0.5, 0.695, "$K_s$ shared + $(mK-K_s)$ routed", ha="center", fontsize=7.7, color="#526079")
 
-# SplitMoE.
-y = 1.08
-row_title(axis, y, "SplitMoE", "active FFN width divided into shared and private parts", 1.18)
-input_and_output(axis, y)
-box(axis, 1.75, y + 0.48, 1.72, 0.58, "Partial-width\nshared FFN", SHARED, fontsize=8.8)
-box(axis, 1.85, y - 0.38, 1.25, 0.58, "Router")
-box(axis, 4.02, y - 0.49, 2.22, 0.80, "$K$ selected partial-width\nprivate FFNs", ROUTED, fontsize=8.8)
-box(axis, 7.23, y, 1.40, 0.58, "Add shared\n+ routed", MERGE, fontsize=8.8)
-arrow(axis, (1.10, y + 0.29), (1.75, y + 0.77))
-arrow(axis, (1.10, y + 0.29), (1.85, y - 0.09))
-arrow(axis, (3.10, y - 0.09), (4.02, y - 0.09))
-arrow(axis, (3.47, y + 0.77), (7.23, y + 0.42))
-arrow(axis, (6.24, y - 0.09), (7.23, y + 0.15))
-arrow(axis, (8.63, y + 0.29), (9.62, y + 0.29))
+# (c) SplitMoE: an explicit shared/private width decomposition.
+axis = axes[2]
+base_panel(axis, "(c) SplitMoE", "one explicit shared/private capacity split")
+split_y, split_h = 0.455, 0.135
+shared_x, shared_w = 0.035, 0.18
+box(axis, shared_x, split_y, shared_w, split_h, "$S$\nshared", SHARED, fontsize=8.3)
+private_xs = [0.285, 0.47, 0.655, 0.84]
+private_w = 0.135
+private_labels = ["$P_1$", "$P_2$", "$\\cdots$", "$P_N$"]
+for x, label in zip(private_xs, private_labels, strict=True):
+    box(axis, x, split_y, private_w, split_h, label, ROUTED, fontsize=8.8)
+axis.text(shared_x + shared_w / 2, 0.615, "width $sD$", ha="center", fontsize=7.7, color="#526079")
+axis.text(0.63, 0.615, "private width $(1-s)D$ each", ha="center", fontsize=7.7, color="#526079")
+selected_outline(axis, shared_x, split_y, shared_w, split_h)
+arrow(axis, (0.5, 0.185), (shared_x + shared_w / 2, split_y), connectionstyle="arc3,rad=-0.28")
+arrow(axis, (shared_x + shared_w / 2, split_y + split_h), (0.5, 0.751), connectionstyle="arc3,rad=0.20")
+for index, curve in ((0, 0.12), (3, -0.12)):
+    selected_outline(axis, private_xs[index], split_y, private_w, split_h)
+    connect_selected(axis, private_xs[index] + private_w / 2, split_y, split_y + split_h, curve)
+axis.text(0.5, 0.695, "$S(x)+\\sum_i p_iP_i(x)$", ha="center", fontsize=8.2, color="#526079")
+
+# Panel separators and legend.
+for x in (0.347, 0.678):
+    fig.add_artist(
+        Line2D(
+            [x, x],
+            [0.19, 0.91],
+            transform=fig.transFigure,
+            color="#94A3B8",
+            linewidth=1.0,
+            linestyle=(0, (5, 4)),
+        )
+    )
 
 legend_handles = [
-    Patch(facecolor=SHARED, edgecolor=INK, label="Always-active shared capacity"),
-    Patch(facecolor=ROUTED, edgecolor=INK, label="Router-selected capacity"),
-    Patch(facecolor=MERGE, edgecolor=INK, label="Add/weighted combination"),
-    Line2D([], [], color="none", label=r"Split merge: $\alpha[S(x)+\sum_i p_iP_i(x)]$"),
+    Patch(facecolor=ROUTED, edgecolor=INK, label="Routed expert"),
+    Patch(facecolor=SHARED, edgecolor=INK, label="Always-active shared expert"),
+    FancyBboxPatch(
+        (0, 0),
+        1,
+        1,
+        fill=False,
+        edgecolor=SELECTED,
+        linewidth=1.6,
+        linestyle=(0, (3, 2)),
+        label="Active path",
+    ),
+    Line2D([], [], color="none", label="$\\oplus$ = add shared output to router-weighted routed outputs"),
 ]
-axis.legend(
+fig.legend(
     handles=legend_handles,
     loc="lower center",
-    bbox_to_anchor=(0.5, -0.075),
+    bbox_to_anchor=(0.5, 0.035),
     ncol=4,
     frameon=False,
-    fontsize=8.4,
-    handlelength=1.8,
-    columnspacing=1.6,
+    fontsize=8.5,
+    handlelength=2.0,
+    columnspacing=1.8,
 )
 
-fig.tight_layout(pad=0.6)
 output = Path("results/architecture.png")
 output.parent.mkdir(parents=True, exist_ok=True)
 fig.savefig(output, dpi=220, bbox_inches="tight", facecolor="white")

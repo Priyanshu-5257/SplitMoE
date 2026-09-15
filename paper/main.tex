@@ -65,7 +65,7 @@ For Top-1, the latter equals $D$ for every $s$. For $K>1$, a fixed split reduces
 \begin{figure}[t]
 \centering
 \includegraphics[width=.98\linewidth]{architecture.png}
-\caption{Three capacity allocations. Standard MoE uses only routed full experts. The DeepSeekMoE-style panel isolates the relevant full shared-expert pattern (omitting its fine-grained segmentation). SplitMoE instead divides active width between partial-width shared and private FFNs. ``Add shared + routed'' denotes the additive combination of the always-active shared output and the router-weighted expert output.}
+\caption{Expert-bank view of Standard MoE, DeepSeekMoE, and SplitMoE. DeepSeekMoE combines fine-grained expert segmentation with isolated always-active shared experts. SplitMoE does not multiply the expert bank into fine-grained segments; it explicitly divides a target active width into one width-$sD$ shared FFN and width-$(1-s)D$ private FFNs. Orange dashed outlines mark active paths, and $\oplus$ adds the shared output to the router-weighted routed outputs.}
 \label{fig:architecture}
 \end{figure}
 
