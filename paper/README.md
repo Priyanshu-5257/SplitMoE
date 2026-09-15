@@ -25,3 +25,13 @@ The release contains:
 - paired raw metrics and generated figures under `results/five_seed`, `results/frontier`, `results/mechanism`, `results/paper_scaling`, `results/heldout`, and `results/systems`.
 
 This is a venue-neutral preprint draft. Submission-specific formatting, author metadata, and archival checkpoint hosting remain separate release decisions.
+
+## arXiv bundle
+
+From the repository root, create the self-contained arXiv source directory and upload archive with:
+
+```bash
+python scripts/build_arxiv_bundle.py
+```
+
+This writes `arxiv/submission/` and `arxiv/splitmoe-arxiv.tar.gz`. The generated source uses only local figure paths and includes both `references.bib` and the compiled `main.bbl`.

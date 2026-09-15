@@ -1,0 +1,102 @@
+\begin{thebibliography}{12}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Dai et~al.(2024)Dai, Deng, Zhao, Xu, Gao, Chen, Li, Zeng, Yu, Wu,
+  et~al.]{dai2024deepseekmoe}
+Damai Dai, Chengqi Deng, Chenggang Zhao, R.~X. Xu, Huazuo Gao, Deli Chen,
+  Jiashi Li, Wangding Zeng, Xingkai Yu, Y.~Wu, et~al.
+\newblock {DeepSeekMoE}: Towards ultimate expert specialization in
+  mixture-of-experts language models.
+\newblock \emph{arXiv preprint arXiv:2401.06066}, 2024.
+
+\bibitem[Fedus et~al.(2022)Fedus, Zoph, and Shazeer]{fedus2022switch}
+William Fedus, Barret Zoph, and Noam Shazeer.
+\newblock Switch transformers: Scaling to trillion parameter models with simple
+  and efficient sparsity.
+\newblock \emph{Journal of Machine Learning Research}, 23\penalty0
+  (120):\penalty0 1--39, 2022.
+
+\bibitem[Gu et~al.(2025)Gu, Li, Li, Zhu, Lee, Sun, Xue, and Guo]{gu2025d2moe}
+Hao Gu, Wei Li, Lujun Li, Qiyuan Zhu, Mark Lee, Shengjie Sun, Wei Xue, and Yike
+  Guo.
+\newblock Delta decompression for {MoE}-based {LLM}s compression.
+\newblock \emph{arXiv preprint arXiv:2502.17298}, 2025.
+
+\bibitem[Huang et~al.(2025)Huang, Ye, Huang, Cao, Zhang, Li, Yu, and
+  Chen]{huang2025ders}
+Yongqi Huang, Peng Ye, Chenyu Huang, Jianjian Cao, Lin Zhang, Baopu Li, Gang
+  Yu, and Tao Chen.
+\newblock {DeRS}: Towards extremely efficient upcycled mixture-of-experts
+  models.
+\newblock \emph{arXiv preprint arXiv:2503.01359}, 2025.
+
+\bibitem[Jung et~al.(2026)Jung, Kwon, Cha, Lee, Yoo, Yoo, and
+  Yang]{jung2026parser}
+Seungwoo Jung, Dohyeok Kwon, Seungmin Cha, Junseok Lee, Yeonho Yoo, Chuck Yoo,
+  and Gyeongsik Yang.
+\newblock Residual sparsification via output importance for compressing
+  mixture-of-experts {LLM}s.
+\newblock \emph{arXiv preprint arXiv:2609.00575}, 2026.
+
+\bibitem[Kornblith et~al.(2019)Kornblith, Norouzi, Lee, and
+  Hinton]{kornblith2019cka}
+Simon Kornblith, Mohammad Norouzi, Honglak Lee, and Geoffrey Hinton.
+\newblock Similarity of neural network representations revisited.
+\newblock In \emph{Proceedings of the 36th International Conference on Machine
+  Learning}, pages 3519--3529, 2019.
+
+\bibitem[Lepikhin et~al.(2020)Lepikhin, Lee, Xu, Chen, Firat, Huang, Krikun,
+  Shazeer, and Chen]{lepikhin2020gshard}
+Dmitry Lepikhin, HyoukJoong Lee, Yuanzhong Xu, Dehao Chen, Orhan Firat, Yanping
+  Huang, Maxim Krikun, Noam Shazeer, and Zhifeng Chen.
+\newblock {GShard}: Scaling giant models with conditional computation and
+  automatic sharding.
+\newblock \emph{arXiv preprint arXiv:2006.16668}, 2020.
+
+\bibitem[Paperno et~al.(2016)Paperno, Kruszewski, Lazaridou, Pham, Bernardi,
+  Pezzelle, Baroni, Boleda, and Fern{\'a}ndez]{paperno2016lambada}
+Denis Paperno, Germ{\'a}n Kruszewski, Angeliki Lazaridou, Ngoc~Quan Pham,
+  Raffaella Bernardi, Sandro Pezzelle, Marco Baroni, Gemma Boleda, and Raquel
+  Fern{\'a}ndez.
+\newblock The {LAMBADA} dataset: Word prediction requiring a broad discourse
+  context.
+\newblock In \emph{Proceedings of the 54th Annual Meeting of the Association
+  for Computational Linguistics}, pages 1525--1534, 2016.
+
+\bibitem[{Qwen Team}(2024)]{qwen2024moe}
+{Qwen Team}.
+\newblock {Qwen1.5-MoE}: Matching 7b model performance with 1/3 activated
+  parameters.
+\newblock \url{https://qwenlm.github.io/blog/qwen-moe/}, 2024.
+\newblock Accessed 2026-09-13.
+
+\bibitem[Sarwar et~al.(2024)Sarwar, Panda, Th{\'e}rien, Rawls, Das,
+  Balasubramaniam, Kapusuzoglu, Zhang, Sahu, Naphade, and
+  Chakraborty]{sarwar2024structmoe}
+Zain Sarwar, Ashwinee Panda, Benjamin Th{\'e}rien, Stephen Rawls, Anirban Das,
+  Kartik Balasubramaniam, Berkcan Kapusuzoglu, Shixiong Zhang, Sambit Sahu,
+  Milind Naphade, and Supriyo Chakraborty.
+\newblock {StructMoE}: Structured mixture of experts using low rank experts.
+\newblock In \emph{Proceedings of the 4th NeurIPS Efficient Natural Language
+  and Speech Processing Workshop}, volume 262, pages 182--193. PMLR, 2024.
+
+\bibitem[Shazeer et~al.(2017)Shazeer, Mirhoseini, Maziarz, Davis, Le, Hinton,
+  and Dean]{shazeer2017outrageously}
+Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le,
+  Geoffrey Hinton, and Jeff Dean.
+\newblock Outrageously large neural networks: The sparsely-gated
+  mixture-of-experts layer.
+\newblock \emph{arXiv preprint arXiv:1701.06538}, 2017.
+
+\bibitem[Zoph et~al.(2022)Zoph, Bello, Kumar, Du, Huang, Dean, Shazeer, and
+  Fedus]{zoph2022stmoe}
+Barret Zoph, Irwan Bello, Sameer Kumar, Nan Du, Yanping Huang, Jeff Dean, Noam
+  Shazeer, and William Fedus.
+\newblock {ST-MoE}: Designing stable and transferable sparse expert models.
+\newblock \emph{arXiv preprint arXiv:2202.08906}, 2022.
+
+\end{thebibliography}
