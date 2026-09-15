@@ -57,7 +57,11 @@ def main() -> None:
 
 
 def plot(rows: list[dict], output: Path) -> None:
-    labels = [row["model"].replace("Top-4 ", "") for row in rows]
+    labels = [
+        row["model"].replace("Top-4 ", "").replace("Practical Split", "Practical\nSplit")
+        .replace("Equal-active Split", "Equal-active\nSplit").replace("Shared expert", "Shared\nexpert")
+        for row in rows
+    ]
     throughput = [row["median_tokens_per_second"] / 1000 for row in rows]
     memory = [row["peak_allocated_bytes"] / 2**30 for row in rows]
     colors = ["#5664d2", "#53a77a", "#d39b43", "#e07255"]
@@ -68,7 +72,7 @@ def plot(rows: list[dict], output: Path) -> None:
     axes[1].bar(x, memory, color=colors)
     axes[1].set(ylabel="Peak allocated GiB ↓", title="Resident model + forward peak")
     for axis in axes:
-        axis.set_xticks(x, labels, rotation=18, ha="right")
+        axis.set_xticks(x, labels)
         axis.grid(axis="y", alpha=0.25)
     fig.suptitle("Standardized single-T4 inference, batch 4 × context 256", fontweight="bold")
     fig.tight_layout()

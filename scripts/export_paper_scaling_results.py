@@ -245,14 +245,24 @@ def plot_convergence(histories, names, output_dir):
 
 def plot_frontier(summary, names, output_dir):
     fig, axis = plt.subplots(figsize=(8.8, 5))
-    offsets = [(8, 8), (-110, 8), (-120, -20), (8, -18)]
-    for name, offset in zip(names, offsets, strict=True):
+    labels = {
+        "Top-4 Standard": ((8, 8), "left"),
+        "Top-4 Practical Split": ((8, 8), "left"),
+        "Top-4 Equal-active Split": ((-8, -24), "right"),
+        "Top-4 Shared expert": ((8, -20), "left"),
+    }
+    for name in names:
         stats = summary["models"][name]
         loss = stats["validation_lm_loss"]
         x = stats["total_parameters"] / 1e6
         axis.errorbar(x, loss["mean"], yerr=[[loss["mean"] - loss["ci95"][0]], [loss["ci95"][1] - loss["mean"]]], fmt="o", color=COLORS[name], capsize=5)
-        axis.annotate(name.replace("Top-4 ", ""), (x, loss["mean"]), xytext=offset, textcoords="offset points")
+        offset, alignment = labels[name]
+        axis.annotate(
+            name.replace("Top-4 ", ""), (x, loss["mean"]), xytext=offset,
+            textcoords="offset points", ha=alignment,
+        )
     axis.set(title="Top-4 quality versus stored parameters", xlabel="Total parameters (millions)", ylabel="Final validation LM loss")
+    axis.margins(x=0.06, y=0.10)
     fig.tight_layout()
     fig.savefig(output_dir / "top4_parameter_frontier.png", bbox_inches="tight")
     plt.close(fig)

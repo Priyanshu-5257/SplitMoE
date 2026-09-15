@@ -290,9 +290,10 @@ def plot_similarity(values: dict, output_dir: Path) -> None:
             ylabel="Mean expert-pair similarity",
             title=titles[metric],
         )
-        axis.legend()
-    fig.suptitle("Same-width control addresses the expert-width confound", fontweight="bold")
-    fig.tight_layout()
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 0.91))
+    fig.suptitle("Same-width control addresses the expert-width confound", fontweight="bold", y=0.99)
+    fig.tight_layout(rect=(0, 0, 1, 0.84))
     fig.savefig(output_dir / "width_controlled_similarity.png", bbox_inches="tight")
     plt.close(fig)
 

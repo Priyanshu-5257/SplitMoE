@@ -191,9 +191,13 @@ def main() -> None:
 
 def plot_frontier(summary: dict, output_dir: Path) -> None:
     fig, axis = plt.subplots(figsize=(8.5, 5))
-    offsets = {
-        "Dense": (6, 8), "Split-75": (6, -17), "Standard-640": (8, 8),
-        "Split-50": (8, -18), "Split-25": (-72, -19), "Standard-1024": (-110, 9),
+    labels = {
+        "Dense": ((8, 8), "left"),
+        "Split-75": ((8, -18), "left"),
+        "Standard-640": ((8, 8), "left"),
+        "Split-50": ((8, -18), "left"),
+        "Split-25": ((-8, -22), "right"),
+        "Standard-1024": ((-8, 10), "right"),
     }
     for name, stats in summary["models"].items():
         mean = stats["validation_lm_loss"]["mean"]
@@ -204,11 +208,16 @@ def plot_frontier(summary: dict, output_dir: Path) -> None:
             yerr=[[mean - ci[0]], [ci[1] - mean]], fmt=marker,
             markersize=8, capsize=4, color=COLORS[name], zorder=3,
         )
-        axis.annotate(name, (TOTAL_PARAMETERS[name] / 1e6, mean), xytext=offsets[name], textcoords="offset points")
+        offset, alignment = labels[name]
+        axis.annotate(
+            name, (TOTAL_PARAMETERS[name] / 1e6, mean), xytext=offset,
+            textcoords="offset points", ha=alignment,
+        )
     axis.set(
         title="Validation quality versus stored parameters",
         xlabel="Total parameters (millions)", ylabel="Balanced validation LM loss (lower is better)",
     )
+    axis.margins(x=0.06, y=0.10)
     fig.tight_layout()
     fig.savefig(output_dir / "quality_vs_parameters.png", bbox_inches="tight")
     plt.close(fig)

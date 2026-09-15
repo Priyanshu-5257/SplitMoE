@@ -146,7 +146,7 @@ def plot_pair(records: dict, left: str, right: str, output: Path) -> None:
         axis.set_title(title)
         axis.set_ylabel(ylabel)
         axis.grid(axis="y", alpha=0.25)
-    fig.suptitle("Independent held-out evaluation (three paired seeds)", fontweight="bold")
+    fig.suptitle("External LAMBADA evaluation (three paired seeds)", fontweight="bold")
     fig.tight_layout()
     fig.savefig(output, dpi=180, bbox_inches="tight")
     plt.close(fig)

@@ -137,7 +137,7 @@ The router has 15 rather than 16 outputs, leaving the full model 4,096 parameter
 
 The shared-expert baseline is complete. It beat Standard in all three paired seeds by mean `−0.01393`, with 95% CI `[−0.02463, −0.00323]`, and had the better mean at all 26 validation checkpoints. It is the strongest tested Top-4 model. This rules out claiming universal superiority for partial-width SplitMoE and narrows the contribution to the measured quality/storage frontier and Top-1 specialization evidence.
 
-### 4. Evaluate on an independent held-out source
+### 4. Evaluate on an external source
 
 The primary Top-1 comparison and strongest matched Top-4 allocation comparison are evaluated on the 5,153-example English LAMBADA test split, which was not used to construct the four-source training mixture. The exact dataset and tokenizer revisions, preprocessing, checksums, raw per-seed results, and evaluation script are published under `results/heldout` and `src/splitmoe`.
 
@@ -169,7 +169,9 @@ The primary-source audit is complete in `paper/RELATED_WORK.md`. The manuscript 
 
 ## Reviewer-control experiment: output scaling and matched storage
 
-This experiment was frozen before training in response to the main reviewer concern. It uses the existing 8-layer, width-512, all-MoE, 8-expert Top-1 setting; 6,500 optimizer steps; seeds 1337, 2027, and 3407; and the identical tokenizer, pretokenized data, effective batch, optimizer, validation sampler, and routing implementation used by the completed scaling comparison.
+**Status: complete.** The valid factorial uses effective batch 128 and 212,992,000 token positions in every cell. Aggregate statistics, per-seed measurements, validation trajectories, and figures are committed under `results/reviewer_controls`.
+
+This experiment was frozen before training in response to the main reviewer concern. It uses the existing 8-layer, width-512, all-MoE, 8-expert Top-1 setting; 6,500 optimizer steps; seeds 1337, 2027, and 3407; and the same tokenizer, pretokenized data, optimizer, validation sampler, and routing implementation used by the completed scaling comparison. The hardware-dependent effective-batch mismatch discovered after launch is documented below and corrected within the factorial.
 
 The primary 2-by-2 control varies architecture and FFN output scale while holding the Standard and Split active FFN width at 1,024:
 
@@ -180,7 +182,7 @@ The primary 2-by-2 control varies architecture and FFN output scale while holdin
 
 The first Kaggle launch exposed a hardware-dependent batch-size mismatch that was recorded before the missing cells were trained: the earlier Modal checkpoints used one T4 and effective batch 64, whereas the new two-T4 Kaggle jobs used effective batch 128. Those checkpoints are not pooled into one factorial analysis. The remaining two cells above complete the factorial entirely at effective batch 128 (212,992,000 training-token positions). The earlier effective-batch-64 results remain a separate training-budget experiment.
 
-The two completion configs log W&B runs in offline mode on Kaggle. Their complete local histories are downloaded and synced after training; no W&B credential is embedded in the Kaggle notebooks.
+The two completion configs log W&B runs in offline mode on Kaggle. Their complete local histories were downloaded and parsed locally; no W&B credential is embedded in the Kaggle notebooks.
 
 The primary outcome is final domain-balanced validation LM loss at step 6,500. Analyses use paired seed differences and two-sided 95% Student-$t$ confidence intervals over the three seeds. The predeclared comparisons are:
 
@@ -191,9 +193,20 @@ The primary outcome is final domain-balanced validation LM loss at step 6,500. A
 
 No confidence interval crossing zero will be described as equivalence. This factorial control separates the effect of sharing from the effect of scaling the residual FFN output. A two-private-branch control is unnecessary because two parallel partial-width SwiGLU branches routed together are algebraically equivalent to one wider conventional expert under the implementation used here.
 
+The completed factorial finds:
+
+- Split-25 minus Standard-1024 at scale 1: `−0.05611 [−0.07734, −0.03488]`, Split wins 3/3 seeds.
+- Split-25 minus Standard-1024 at scale $1/\sqrt{2}$: `−0.03569 [−0.05273, −0.01865]`, Split wins 3/3 seeds.
+- Split scale 1 minus Split scale $1/\sqrt{2}$: `+0.00069 [−0.00389, +0.00528]`.
+- Standard scale 1 minus Standard scale $1/\sqrt{2}$: `+0.02111 [+0.01601, +0.02622]`.
+- Architecture-by-scale interaction: `−0.02042 [−0.02745, −0.01339]`.
+- At equal storage and scale 1, Split-25 minus Standard-800: `−0.06261 [−0.06340, −0.06183]`, with 6.3% more activated full-model parameters for Split.
+
+The result therefore survives removal of the fixed $1/\sqrt{2}$ multiplier. Scale affects Standard and Split differently, so this is evidence against the scaling-confound explanation rather than evidence that scaling never matters.
+
 An additional equal-storage baseline, `review_standard800_scale1.json`, compares width-800 Standard MoE with Split-25 at output scale 1. Both contain exactly 112,370,176 total parameters. Split activates more parameters per token, so this is explicitly a storage/quality comparison rather than an equal-compute comparison.
 
-All nine new runs use separate W&B namespaces:
+The original nine planned runs use separate W&B namespaces; the six corrective batch-matched runs retain the scale namespace in offline mode:
 
 - project `splitmoe-paper-review-scale` for the six factorial-control runs;
 - project `splitmoe-paper-review-storage` for the three equal-storage runs.
@@ -268,7 +281,8 @@ A transparent sub-billion-parameter study with paired seeds, public code, raw me
 - [x] Record peak VRAM and standardized throughput
 - [x] Add equal-active-compute control
 - [x] Add shared-expert baseline
-- [x] Add independent held-out evaluation
+- [x] Add external LAMBADA evaluation with contamination caveat
+- [x] Complete the batch-matched output-scale factorial and equal-storage control
 - [x] Publish dataset revisions, checksums, and preprocessing manifest
 - [x] Decide checkpoint policy: publish exact configs and metrics; do not bundle large model weights in the repository
 - [x] Complete primary-source related-work review
@@ -282,6 +296,7 @@ For a first preprint, stop training after all of the following are available:
 2. one completed larger-scale comparison, with additional paired seeds only if the exploratory result justifies them;
 3. one equal-active-compute control;
 4. one conventional shared-expert baseline;
-5. independent held-out evaluation and standardized systems measurements.
+5. external LAMBADA evaluation and standardized systems measurements;
+6. batch-matched output-scale and equal-storage reviewer controls.
 
 Anything beyond this list should answer a specific reviewer question rather than simply making the experiment grid larger.

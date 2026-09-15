@@ -21,16 +21,16 @@ The common computation now needs to be stored and evaluated only once. The route
 This repository tests that idea with a controlled SplitMoE layer:
 
 $$
-F_{\mathrm{split}}(x) = \frac{1}{\sqrt{2}}\left(S(x) + P_{i^{\ast}}(x)\right), \qquad i^{\ast}=\mathop{\mathrm{arg\,max}}_i p_i(x).
+F_{\mathrm{split}}(x) = \alpha\left(S(x) + P_{i^{\ast}}(x)\right), \qquad i^{\ast}=\mathop{\mathrm{arg\,max}}_i p_i(x).
 $$
 
-Rather than adding a full shared expert on top of a normal MoE, SplitMoE divides the same active FFN width between a shared branch and one routed private branch. This lets us ask a precise question:
+Rather than adding a full shared expert on top of a normal MoE, SplitMoE divides the same active FFN width between a shared branch and one routed private branch. The output multiplier $\alpha$ is an optimization choice, not part of the sharing hypothesis; the confirmatory experiment tests both $\alpha=1$ and $\alpha=1/\sqrt{2}$. This lets us ask a precise question:
 
 > At matched activated capacity, can a shared/private MoE retain the quality of a conventional Top-1 MoE while storing fewer parameters?
 
 ## Result in one sentence
 
-**SplitMoE improves the stored-parameter frontier under Top-1, including a three-seed all-MoE result with 16.4% fewer total parameters and lower loss than Standard that reproduces on independently sourced LAMBADA text; under 16-expert Top-4 routing, matching active capacity closes the partial-width Split gap, but a conventional full shared expert achieves the best quality, showing that the best shared/private allocation depends on the routing regime.**
+**In a batch-matched, three-seed Top-1 experiment, Split-25 uses 16.4% fewer total parameters at equal activated capacity and beats Standard at both tested output scales; under 16-expert Top-4 routing, however, a conventional full shared expert achieves the best quality, so the preferred shared/private allocation depends on the routing regime.**
 
 This is a positive parameter-efficiency result, not proof that the shared path represents “common knowledge” in a semantic sense. Post-training interventions nevertheless show that both SplitMoE branches matter, correct private-expert routing matters, and the private experts are less redundant than complete Standard experts.
 
@@ -40,7 +40,7 @@ The venue-neutral preprint draft is available as [`paper/main.pdf`](paper/main.p
 
 ## All-MoE scaling results
 
-We replaced every FFN in an 8-layer, width-512 decoder with an MoE and trained three paired seeds for 6,500 optimizer steps. The first experiment used eight experts and Top-1 routing. Split-25 allocated width 256 to the shared path and 768 to each private expert, exactly matching Standard's active FFN width while reducing total stored parameters by 16.4%.
+We replaced every FFN in an 8-layer, width-512 decoder with an MoE and trained three paired seeds for 6,500 optimizer steps. The first experiment used eight experts and Top-1 routing. Split-25 allocated width 256 to the shared path and 768 to each private expert, exactly matching Standard's active FFN width while reducing total stored parameters by 16.4%. These initial runs used effective batch 64, or 106.5M training token positions.
 
 | 8E Top-1 model | Total params | Activated params/token | Validation LM loss | Paired Split − Standard |
 | --- | ---: | ---: | ---: | ---: |
@@ -50,6 +50,26 @@ We replaced every FFN in an 8-layer, width-512 decoder with an MoE and trained t
 Split won all three paired seeds and all four validation domains. This result is positive at this scale, but it should not be compared numerically with the earlier 10,000-step experiments because the architecture, number of MoE layers, training horizon, and routing setup differ.
 
 ![Paired 8-expert Top-1 all-MoE results](results/paper_scaling/top1_paired_loss.png)
+
+### Batch-matched output-scale control
+
+The confirmatory runs use effective batch 128 on two T4 GPUs, corresponding to 213.0M training token positions. They form a complete $2\times2$ comparison of Standard-1024 and Split-25 at output scales $1$ and $1/\sqrt{2}$. These results are analyzed separately from the earlier effective-batch-64 runs.
+
+| Model | Output scale | Total params | Activated params/token | Validation LM loss |
+| --- | ---: | ---: | ---: | ---: |
+| Standard-1024 | $1$ | 134.39M | 46.31M | 3.08106 |
+| Standard-1024 | $1/\sqrt{2}$ | 134.39M | 46.31M | 3.05994 |
+| Split-25 | $1$ | **112.37M** | 46.31M | **3.02495** |
+| Split-25 | $1/\sqrt{2}$ | **112.37M** | 46.31M | **3.02425** |
+| Standard-800 | $1$ | 112.37M | **43.56M** | 3.08756 |
+
+At scale 1, Split beats Standard by `−0.05611 [−0.07734, −0.03488]`; at scale $1/\sqrt{2}$, it wins by `−0.03569 [−0.05273, −0.01865]`. Both comparisons are paired across seeds and Split wins 3/3 seeds. Split itself changes by only `+0.00069 [−0.00389, +0.00528]` between scales, while Standard improves by `−0.02111` at the smaller scale. Thus scaling affects the architectures differently, but the fixed multiplier does not explain Split's advantage at either tested value.
+
+![Batch-matched output-scale factorial](results/reviewer_controls/output_scale_factorial.png)
+
+At equal total storage and scale 1, Split-25 beats Standard-800 by `−0.06261 [−0.06340, −0.06183]` in 3/3 seeds. Split activates 6.3% more full-model parameters in this comparison, so it is an equal-storage result rather than an equal-compute result.
+
+![Equal-storage paired comparison](results/reviewer_controls/equal_storage_paired.png)
 
 We then increased the routing problem to 16 experts with four active routes. Four variants separate storage, active capacity, and shared-expert allocation:
 
@@ -76,6 +96,8 @@ The domain results tell the same broad story: the full shared expert has the low
 
 Training throughput does not follow activated parameter count exactly. The shared-expert baseline is marginally faster than Standard, while both partial-width Split variants are slower because they launch a separate shared FFN in addition to routed FFNs. Practical Split nevertheless lowers peak reserved VRAM from 6.38 GiB to 5.32 GiB per GPU.
 
+Using the three SwiGLU projections and counting one multiply-add as two FLOPs, the eight MoE layers require approximately 100.66M FFN-projection FLOPs/token for Standard, equal-active Split, and the shared-expert baseline, versus 81.79M for practical Split. This excludes routing, nonlinearities, attention, embeddings, and the output head; measured throughput remains the more relevant systems result.
+
 ![Top-4 throughput and VRAM](results/paper_scaling/top4_systems.png)
 
 A separate architecture-only benchmark removes training, validation, checkpointing, and W&B overhead. On one Tesla T4 with FP16, batch 4, context 256, 10 warmups, and 50 measured forwards, Standard, practical Split, equal-active Split, and the shared-expert baseline reached 19.32k, 17.36k, 18.31k, and 19.44k tokens/s. Their peak allocated memory was 1.41, 1.16, 1.36, and 1.42 GiB, respectively. These deterministic randomly initialized models isolate reference-implementation cost; they do not reproduce trained routing distributions.
@@ -88,7 +110,7 @@ Shared/private activation ratios are depth-dependent. Every shared architecture 
 
 Together, these experiments support a bounded conclusion: reusable always-active capacity is useful, but partial-width factorization is a quality/storage tradeoff rather than a universally superior replacement for conventional shared experts. Under Top-1, Split-25 moves the observed parameter-quality frontier; under Top-4, a full shared expert gives the best quality at matched FFN storage and activation.
 
-## Independent held-out evaluation
+## External LAMBADA evaluation
 
 We evaluated existing 6,500-step checkpoints on the 5,153-example English test split of [`EleutherAI/lambada_openai`](https://huggingface.co/datasets/EleutherAI/lambada_openai), a source not intentionally included in the four-domain training mixture. All twelve evaluations use the same CPU FP32 path. Documents are tokenized independently without special tokens; documents longer than the model window retain their final 257 tokens, and batching never pads or joins documents. Full-token autoregressive LM loss is the primary metric. Final-word token loss and exact argmax token-sequence match are teacher-forced diagnostics, not free-running LAMBADA accuracy.
 
@@ -99,7 +121,7 @@ We evaluated existing 6,500-step checkpoints on the 5,153-example English test s
 | 16E Top-4 | Equal-active Split | 4.77157 | 6.20603 | 8.06% |
 | 16E Top-4 | Full shared expert | **4.76137** | **6.16261** | **8.23%** |
 
-For Top-1, Split-25 beats Standard in every seed. Its paired full-loss difference is `−0.06372 [−0.10240, −0.02504]`; target-token loss improves by `−0.34892 [−0.51772, −0.18012]`, and teacher-forced exact token-sequence match improves by `+0.01895 [0.00651, 0.03140]`. This independently reproduces the direction of the in-domain Top-1 result.
+For Top-1, Split-25 beats Standard in every seed. Its paired full-loss difference is `−0.06372 [−0.10240, −0.02504]`; target-token loss improves by `−0.34892 [−0.51772, −0.18012]`, and teacher-forced exact token-sequence match improves by `+0.01895 [0.00651, 0.03140]`. This corroborates the direction of the in-domain Top-1 result on a separately sourced corpus, but is not a contamination audit.
 
 ![Top-1 paired LAMBADA evaluation](results/heldout/top1_lambada.png)
 
@@ -212,7 +234,7 @@ Over the final 1,000 steps, the five-seed mean ratios in Transformer layers 2, 4
 
 Activation magnitude alone does not establish functional complementarity, so we tested the saved checkpoints directly.
 
-### Post-training causal validation
+### Post-training route-dependence validation
 
 For every seed, we evaluated 16 evenly spaced validation blocks from each of the four domains. For a token routed to expert $i^{\ast}$, the stricter wrong-expert test evaluates all three alternatives $j \ne i^{\ast}$ separately and averages their losses. This removes dependence on any single counterfactual mapping. Router choices are retained for measurement, and SplitMoE ablations retain the output scale used during training.
 
@@ -294,10 +316,10 @@ Only one expert runs, so the layer activates width 1024 while storing four width
 Each replaced layer stores one width-512 shared FFN and four width-512 private FFNs. Every token uses the shared path and one routed private path:
 
 $$
-F(x)=\frac{1}{\sqrt{2}}\left(S(x)+P_{i^{\ast}}(x)\right).
+F(x)=\alpha\left(S(x)+P_{i^{\ast}}(x)\right).
 $$
 
-The activated width is `512 + 512 = 1024`, matching Standard MoE, while the stored width is `512 + 4 × 512 = 2560` instead of `4 × 1024 = 4096`.
+The activated width is `512 + 512 = 1024`, matching Standard MoE, while the stored width is `512 + 4 × 512 = 2560` instead of `4 × 1024 = 4096`. Initial experiments set $\alpha=1/\sqrt{2}$; the later control shows Split-25 gives nearly identical validation loss at $\alpha=1$.
 
 | Model | FFN used by one token in a replaced layer | Stored paths | Total params | Activated params/token |
 | --- | --- | ---: | ---: | ---: |
@@ -530,7 +552,7 @@ The committed mechanism summary combines Standard-512 with analogous Standard-64
 
 The earlier single-seed pilot remains under [`results`](results). Its validation slice contained stories only because evaluation consumed the first source-ordered blocks. The five-seed experiment corrected this with a fixed `DomainBalancedSampler`; the pilot should not be used as the headline result.
 
-### Independent evaluation and systems artifacts
+### External evaluation and systems artifacts
 
 Prepare the pinned English LAMBADA test set, evaluate a model-only checkpoint, and rebuild the paired report with:
 
@@ -587,7 +609,7 @@ python scripts/smoke_test.py --top-k 4
 
 ### Reviewer-control runs
 
-The predeclared output-scaling control completes a 2-by-2 comparison of Standard-1024 and Split-25 at output scales $1$ and $1/\sqrt{2}$. It also adds a width-800 Standard baseline with exactly the same total parameter count as Split-25. The first launch revealed that the older Modal runs used effective batch 64 while the two-T4 Kaggle controls used effective batch 128; the two budgets are therefore analyzed separately, and two additional batch-128 cells complete the valid factorial. The full hypotheses and statistical protocol are frozen in [`PAPER_PLAN.md`](PAPER_PLAN.md#reviewer-control-experiment-output-scaling-and-matched-storage).
+The predeclared output-scaling control completed a 2-by-2 comparison of Standard-1024 and Split-25 at output scales $1$ and $1/\sqrt{2}$. It also added a width-800 Standard baseline with exactly the same total parameter count as Split-25. The first launch revealed that the older Modal runs used effective batch 64 while the two-T4 Kaggle controls used effective batch 128; the two budgets are therefore analyzed separately, and two additional batch-128 cells completed the valid factorial. Aggregate statistics, per-seed records, trajectories, provenance, and figures are in [`results/reviewer_controls`](results/reviewer_controls). The hypotheses and statistical protocol were frozen in [`PAPER_PLAN.md`](PAPER_PLAN.md#reviewer-control-experiment-output-scaling-and-matched-storage) and timestamped by commit [`60f2f68`](https://github.com/Priyanshu-5257/SplitMoE/commit/60f2f68); the corrective batch-matched cells were recorded in [`fa9e55b`](https://github.com/Priyanshu-5257/SplitMoE/commit/fa9e55b) before they ran.
 
 Each seed can be launched independently on 2-GPU Kaggle with the same command shape:
 
@@ -608,12 +630,12 @@ The smoke test creates a temporary memory-mapped dataset, performs optimizer ste
 
 ## Reproducibility notes
 
-- All variants use the same seeds, pretokenized blocks, optimizer schedule, and fixed validation sample.
-- The effective training batch is 64 sequences: 8 per GPU, 2 GPUs, and 4 gradient-accumulation steps.
+- Variants within each reported paired comparison use the same seeds, pretokenized blocks, optimizer schedule, and fixed validation sample.
+- Initial all-MoE runs use effective batch 64 and 106.5M token positions. Reviewer-control runs use effective batch 128 and 213.0M token positions; results from these budgets are not pooled.
 - The default router uses a straight-through selected gate: its forward scale is one while task gradients still reach the router.
 - Auxiliary load balancing and router z-loss are included in total loss but not in `lm_loss`.
 - Data are packed within domains, so each block has one unambiguous domain label.
-- The original training-data source revisions were not pinned; the independent LAMBADA evaluation added for the paper pins both dataset and tokenizer revisions and publishes content checksums.
+- The original training-data source revisions were not pinned; the external LAMBADA evaluation added for the paper pins both dataset and tokenizer revisions and publishes content checksums.
 - No capacity-based token dropping or expert-parallel communication is used.
 - Checkpoints are written atomically and include model, optimizer, scaler, step, and configuration.
 
