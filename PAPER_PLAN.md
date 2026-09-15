@@ -175,8 +175,10 @@ The primary 2-by-2 control varies architecture and FFN output scale while holdin
 
 | Architecture | Output scale $1$ | Output scale $1/\sqrt{2}$ |
 | --- | --- | --- |
-| Standard-1024 | Existing checkpoints | `review_standard1024_scale07071.json` |
-| Split-25 (256 shared + 768 private) | `review_split25_scale1.json` | Existing checkpoints |
+| Standard-1024 | `review_standard1024_scale1_batch128.json` | `review_standard1024_scale07071.json` |
+| Split-25 (256 shared + 768 private) | `review_split25_scale1.json` | `review_split25_scale07071_batch128.json` |
+
+The first Kaggle launch exposed a hardware-dependent batch-size mismatch that was recorded before the missing cells were trained: the earlier Modal checkpoints used one T4 and effective batch 64, whereas the new two-T4 Kaggle jobs used effective batch 128. Those checkpoints are not pooled into one factorial analysis. The remaining two cells above complete the factorial entirely at effective batch 128 (212,992,000 training-token positions). The earlier effective-batch-64 results remain a separate training-budget experiment.
 
 The primary outcome is final domain-balanced validation LM loss at step 6,500. Analyses use paired seed differences and two-sided 95% Student-$t$ confidence intervals over the three seeds. The predeclared comparisons are:
 

@@ -157,6 +157,28 @@ def test_seed_override_produces_isolated_run_identity():
     assert config.train.wandb_run_name == "review-split25-scale1-seed-2027"
 
 
+def test_batch128_review_completion_configs_fill_missing_factorial_cells():
+    root = Path(__file__).parents[1]
+    standard = ExperimentConfig.from_json(
+        root / "configs" / "review_standard1024_scale1_batch128.json"
+    )
+    split = ExperimentConfig.from_json(
+        root / "configs" / "review_split25_scale07071_batch128.json"
+    )
+
+    assert standard.model.standard_output_scale == 1.0
+    assert split.model.split_output_scale == pytest.approx(2**-0.5)
+    for config in (standard, split):
+        assert config.train.seeds == [1337, 2027, 3407]
+        assert config.train.micro_batch_size == 4
+        assert config.train.gradient_accumulation_steps == 16
+        assert config.train.max_steps == 6500
+        assert config.train.wandb_project == "splitmoe-paper-review-scale"
+    assert DecoderLM(standard.model).parameter_summary()["activated_per_token"] == (
+        DecoderLM(split.model).parameter_summary()["activated_per_token"]
+    ) == 46_309_888
+
+
 def test_kaggle_allmoe_16e_top4_configs_are_paired_and_isolated():
     root = Path(__file__).parents[1]
     seeds = [1337, 2027, 3407]

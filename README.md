@@ -587,7 +587,7 @@ python scripts/smoke_test.py --top-k 4
 
 ### Reviewer-control runs
 
-The predeclared output-scaling control completes a 2-by-2 comparison of Standard-1024 and Split-25 at output scales $1$ and $1/\sqrt{2}$. It also adds a width-800 Standard baseline with exactly the same total parameter count as Split-25. The full hypotheses and statistical protocol are frozen in [`PAPER_PLAN.md`](PAPER_PLAN.md#reviewer-control-experiment-output-scaling-and-matched-storage).
+The predeclared output-scaling control completes a 2-by-2 comparison of Standard-1024 and Split-25 at output scales $1$ and $1/\sqrt{2}$. It also adds a width-800 Standard baseline with exactly the same total parameter count as Split-25. The first launch revealed that the older Modal runs used effective batch 64 while the two-T4 Kaggle controls used effective batch 128; the two budgets are therefore analyzed separately, and two additional batch-128 cells complete the valid factorial. The full hypotheses and statistical protocol are frozen in [`PAPER_PLAN.md`](PAPER_PLAN.md#reviewer-control-experiment-output-scaling-and-matched-storage).
 
 Each seed can be launched independently on 2-GPU Kaggle with the same command shape:
 
