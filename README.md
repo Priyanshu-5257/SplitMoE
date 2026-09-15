@@ -36,7 +36,9 @@ This is a positive parameter-efficiency result, not proof that the shared path r
 
 The venue-neutral preprint draft is available as [`paper/main.pdf`](paper/main.pdf), with LaTeX source, bibliography, and a primary-source novelty audit under [`paper/`](paper/). The manuscript deliberately presents SplitMoE as a regime-dependent allocation method rather than claiming that shared experts themselves are new.
 
-![Standard MoE and SplitMoE architecture](results/architecture.png)
+![Standard MoE, full shared-expert MoE, and SplitMoE architecture comparison](results/architecture.png)
+
+The middle row shows the established DeepSeekMoE-style shared-expert pattern relevant to this study: a complete shared FFN is always active alongside full routed experts. It is a conceptual isolation of shared-expert allocation, not a reproduction of DeepSeekMoE's full fine-grained segmentation diagram. The yellow merge box means that the shared output is added to the router-weighted routed output; for SplitMoE this is $\alpha[S(x)+\sum_i p_iP_i(x)]$.
 
 ## All-MoE scaling results
 
