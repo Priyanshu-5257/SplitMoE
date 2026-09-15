@@ -180,6 +180,8 @@ The primary 2-by-2 control varies architecture and FFN output scale while holdin
 
 The first Kaggle launch exposed a hardware-dependent batch-size mismatch that was recorded before the missing cells were trained: the earlier Modal checkpoints used one T4 and effective batch 64, whereas the new two-T4 Kaggle jobs used effective batch 128. Those checkpoints are not pooled into one factorial analysis. The remaining two cells above complete the factorial entirely at effective batch 128 (212,992,000 training-token positions). The earlier effective-batch-64 results remain a separate training-budget experiment.
 
+The two completion configs log W&B runs in offline mode on Kaggle. Their complete local histories are downloaded and synced after training; no W&B credential is embedded in the Kaggle notebooks.
+
 The primary outcome is final domain-balanced validation LM loss at step 6,500. Analyses use paired seed differences and two-sided 95% Student-$t$ confidence intervals over the three seeds. The predeclared comparisons are:
 
 1. Split versus Standard at output scale 1;

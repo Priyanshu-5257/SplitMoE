@@ -36,6 +36,6 @@
     "num_workers": 2,
     "wandb_project": "splitmoe-paper-review-scale",
     "wandb_run_name": "review-split25-scale07071-batch128",
-    "wandb_mode": "online"
+    "wandb_mode": "offline"
   }
 }
